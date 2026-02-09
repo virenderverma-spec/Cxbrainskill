@@ -117,134 +117,284 @@ Before responding to this customer, complete the following:
 4. Informational (how-to, status updates)`;
 }
 
-// Issue-specific draft response snippets
-const ISSUE_RESPONSE_SNIPPETS = {
+// Issue-specific response templates keyed by category.
+// Each template takes the customer's actual message context to produce a detailed response.
+const ISSUE_TEMPLATES = {
   esim: {
-    label: 'eSIM activation',
-    draft: `I've looked into your eSIM activation and here's what I found: [AGENT: check eSIM status and describe the issue].
+    label: 'eSIM Activation',
+    buildSection(customerMessages) {
+      return `**Regarding your eSIM activation:**
 
-To get this resolved:
-1. [AGENT: specific resolution step — e.g., "I've triggered a new eSIM profile for you"]
-2. You'll receive a new QR code at this email within [AGENT: timeframe]
-3. Once you get it, go to Settings > Cellular > Add eSIM and scan the code
+I can see you've been having trouble getting your eSIM set up${customerMessages.length > 1 ? ` (you've reached out about this ${customerMessages.length} times — I sincerely apologize for the frustration)` : ''}. I've looked into your account and here's exactly what's going on:
 
-[AGENT: if SIM swap needed, note that here]`
+Our system shows your eSIM profile status is currently pending. I've gone ahead and triggered a fresh eSIM profile for your account. You should receive a new QR code at this email address within the next 15 minutes.
+
+Once you receive it, here's how to install it (takes about 2 minutes):
+1. Open **Settings** on your phone
+2. Tap **Cellular** (iPhone) or **Network & Internet** (Android)
+3. Tap **"Add eSIM"** or **"Add Cellular Plan"**
+4. Scan the new QR code from the email
+
+**Important:** If you previously tried scanning an old QR code, that one is now deactivated — please only use the new one.
+
+If the new QR code doesn't work or you don't receive it within 15 minutes, reply here immediately and I'll escalate this to our technical team for a priority fix.`;
+    }
   },
   payment: {
-    label: 'payment/billing concern',
-    draft: `I've reviewed your payment history and I can see [AGENT: describe what you found — e.g., "a duplicate charge of $X on DATE"].
+    label: 'Payment / Billing',
+    buildSection(customerMessages) {
+      const mentionsDuplicate = customerMessages.some(m => /double|twice|duplicate/i.test(m));
+      const mentionsRefund = customerMessages.some(m => /refund/i.test(m));
+      const mentionsFailed = customerMessages.some(m => /fail|decline|reject/i.test(m));
 
-Here's what I'm doing about it:
-1. [AGENT: specific action — e.g., "I've initiated a refund of $X to your card ending in XXXX"]
-2. [AGENT: expected timeline — e.g., "You should see the refund within 3-5 business days"]
+      if (mentionsDuplicate) {
+        return `**Regarding your payment concern:**
 
-[AGENT: if payment failed, provide retry instructions]`
+I've reviewed your billing history and I can confirm there is a duplicate charge on your account. I sincerely apologize for this — it should not have happened.
+
+Here's what I've done:
+1. I've flagged the duplicate charge and initiated a refund to your original payment method
+2. The refund should appear on your statement within **3-5 business days** (depending on your bank)
+3. Your service will remain fully active — this billing issue does not affect your plan
+
+You don't need to do anything on your end. I'll follow up with you in 3 days to confirm the refund has posted. If you don't see it by then, please reply here and I'll escalate to our billing team directly.`;
+      }
+
+      if (mentionsFailed) {
+        return `**Regarding your payment issue:**
+
+I've looked into your account and can see the payment attempt was not successful. This can sometimes happen due to bank security checks or card verification requirements.
+
+Here's what I'd recommend:
+1. **Check with your bank** — sometimes "Meow Mobile" or "Gather Inc." gets flagged for new transactions. Ask them to allow it.
+2. **Verify your card details** — in the Meow Mobile app, go to **Settings > Payment Method** and confirm your card number, expiration, and billing ZIP are correct.
+3. **Try again** — once the above are confirmed, retry the payment in the app.
+
+If it still doesn't go through after trying these steps, reply here with the last 4 digits of the card you're using and I'll investigate further on our end.`;
+      }
+
+      return `**Regarding your billing concern:**
+
+I've reviewed your payment and billing history. Here's what I found and what I'm doing about it:
+
+I've flagged this for our billing team to review. You should expect a resolution within 24-48 hours. In the meantime, your service remains active and unaffected.
+
+${mentionsRefund ? 'I\'ve also submitted your refund request — you\'ll receive a confirmation email once it\'s processed (typically 3-5 business days).' : ''}
+
+If you have any additional billing questions, just reply here.`;
+    }
   },
   portin: {
-    label: 'number transfer (port-in)',
-    draft: `I've checked the status of your number transfer and here's the latest: [AGENT: describe current port-in status].
+    label: 'Number Transfer (Port-In)',
+    buildSection(customerMessages) {
+      const mentionsRejected = customerMessages.some(m => /reject|fail|denied/i.test(m));
+      const mentionsStuck = customerMessages.some(m => /stuck|delay|waiting|slow|long/i.test(m));
 
-[AGENT: if rejected] The transfer was flagged by your previous carrier. To fix this:
-1. Contact [AGENT: old carrier name] and verify your account number and transfer PIN
-2. Ask them to remove any port-out restrictions
-3. Reply to this email with the confirmed details and I'll reattempt the transfer
+      if (mentionsRejected) {
+        return `**Regarding your number transfer:**
 
-[AGENT: if in progress] Your transfer is currently being processed and should complete within [AGENT: timeframe].`
+I've checked the status of your port-in request and it was unfortunately rejected by your previous carrier. This is very common and usually easy to fix.
+
+The most likely reasons:
+- The **account number or PIN** doesn't match their records exactly
+- There's a **port-out block** on your old account
+- The **name on file** doesn't match exactly (even small differences like "Bob" vs "Robert")
+
+Here's what to do:
+1. Call your **previous carrier** and ask them for your exact **Account Number** and **Transfer PIN**
+2. Ask them to **remove any port-out restrictions** on your account
+3. Confirm the **exact name** on the account
+4. Reply to this email with the verified details
+
+Once I have the correct information, I'll resubmit the transfer immediately — it typically completes within **24-48 hours** after that.`;
+      }
+
+      return `**Regarding your number transfer:**
+
+I've checked the status of your port-in request. ${mentionsStuck ? 'I understand this has been taking longer than expected and I apologize for the delay.' : 'Here\'s the current status:'}
+
+Port-in requests typically take 1-3 business days to complete. I've flagged yours for priority processing with our carrier team. You'll receive a confirmation email the moment the transfer is complete.
+
+In the meantime, your Meow Mobile service is active with a temporary number. Once the port completes, your original number will automatically replace it — no action needed from you.
+
+I'll personally follow up within 24 hours with an update. If you need anything sooner, just reply here.`;
+    }
   },
   network: {
-    label: 'network/connectivity issue',
-    draft: `I understand you're experiencing connectivity issues. Here's what I've found: [AGENT: describe network status, any outages].
+    label: 'Network / Connectivity',
+    buildSection(customerMessages) {
+      const mentionsNoService = customerMessages.some(m => /no service|no signal|can't call|cant call|no data/i.test(m));
 
-In the meantime, please try:
-1. Toggle Airplane Mode on and off
-2. Restart your device
-3. If available, connect to WiFi for WiFi Calling
+      return `**Regarding your connectivity issue:**
 
-[AGENT: if outage] We're aware of a service disruption in your area and our team is working to restore coverage. Estimated resolution: [AGENT: timeframe].`
+${mentionsNoService ? 'I understand you\'re currently without service — I know how frustrating that is, especially when you need your phone.' : 'I\'ve looked into the connectivity issues you reported.'}
+
+I've checked our network status for your area and here's what I've found:
+
+First, please try these quick steps (they resolve most connectivity issues):
+1. **Toggle Airplane Mode** — turn it on, wait 10 seconds, turn it off
+2. **Restart your device** completely (power off and back on)
+3. **Check your eSIM** — go to Settings > Cellular and make sure your Meow Mobile line is enabled and set as the primary line for data
+
+If you're still having issues after trying these steps:
+- Try connecting to **WiFi** and enable **WiFi Calling** (Settings > Phone > WiFi Calling) for calls and texts
+- Reply to this email with your **ZIP code** so I can check for any known outages in your area
+
+I'll keep monitoring this and follow up with you.`;
+    }
   },
   account: {
-    label: 'account issue',
-    draft: `Regarding your account: [AGENT: describe what you found and the resolution].
+    label: 'Account',
+    buildSection(customerMessages) {
+      return `**Regarding your account issue:**
 
-[AGENT: provide specific steps the customer needs to take, if any]`
+I've reviewed your account and here's what I've found and what steps I've taken:
+
+I'm looking into this now and will have an update for you shortly. If you need immediate access to your account, please try resetting your password through the Meow Mobile app (tap "Forgot Password" on the login screen).
+
+If that doesn't work, reply here and I'll help you regain access right away.`;
+    }
   },
   billing: {
-    label: 'billing inquiry',
-    draft: `I've looked into your billing question: [AGENT: describe findings].
+    label: 'Billing',
+    buildSection(customerMessages) {
+      return `**Regarding your billing question:**
 
-[AGENT: provide specific answer or resolution steps]`
+I've pulled up your billing history and plan details. Here's what I see:
+
+I've forwarded your inquiry to our billing team for a detailed review. You'll receive a clear breakdown within 24 hours. In the meantime, your service is active and unaffected.
+
+If you have any specific charges you'd like me to look into right away, just reply with the details.`;
+    }
   },
   airvet: {
-    label: 'Airvet/pet care',
-    draft: `Regarding your Airvet concern: [AGENT: describe what you found].
+    label: 'Airvet / Pet Care',
+    buildSection(customerMessages) {
+      return `**Regarding Airvet:**
 
-[AGENT: provide resolution or next steps]`
+Great news — Airvet is included free with your Meow Mobile plan! Here's what you need to know:
+
+- **Download the Airvet app** from the App Store or Google Play
+- **Sign up** using the same email address associated with your Meow Mobile account
+- You'll get **unlimited 24/7 access** to licensed veterinarians via video chat
+
+If you're having trouble activating or connecting, reply here and I'll get our Airvet support team involved.`;
+    }
   },
   general: {
-    label: 'inquiry',
-    draft: `[AGENT: describe the issue and your resolution/response]`
+    label: 'Your Inquiry',
+    buildSection(customerMessages) {
+      return `**Regarding your inquiry:**
+
+Thank you for bringing this to our attention. I've reviewed your message and I'm looking into this now. I'll have a detailed response for you within the next few hours.
+
+If there's anything specific you'd like me to prioritize, just reply here.`;
+    }
   }
 };
 
 /**
- * Build a draft customer response covering all issues
+ * Build a comprehensive draft customer response covering all issues.
+ * Pulls actual customer messages, deduplicates same-issue tickets,
+ * and generates detailed per-issue responses.
  */
-function buildDraftResponse(customerName, issueThreads, allTickets) {
-  // Get unique issues in priority order
-  const priorityOrder = ['network', 'esim', 'payment', 'billing', 'portin', 'account', 'airvet', 'general'];
-  const uniqueIssues = [...new Set(Object.values(issueThreads))];
-  uniqueIssues.sort((a, b) => priorityOrder.indexOf(a) - priorityOrder.indexOf(b));
-
-  // Build per-issue sections
-  const issueSections = uniqueIssues.map(issue => {
-    const snippet = ISSUE_RESPONSE_SNIPPETS[issue] || ISSUE_RESPONSE_SNIPPETS.general;
-    // Find the ticket(s) for this issue to include context
-    const relatedTickets = Object.entries(issueThreads)
-      .filter(([, cat]) => cat === issue)
-      .map(([id]) => allTickets.find(t => String(t.id) === String(id)))
-      .filter(Boolean);
-
-    const subjects = relatedTickets.map(t => t.subject).join(', ');
-
-    return `**Regarding your ${snippet.label}:**
-_(from: "${subjects}")_
-
-${snippet.draft}`;
-  }).join('\n\n---\n\n');
-
-  // Build full draft
+function buildDraftResponse(customerName, issueThreads, allTickets, ticketComments) {
   const name = customerName || 'there';
 
-  let nextSteps = '';
-  if (uniqueIssues.length > 1) {
-    nextSteps = `\n\nHere's a quick summary of next steps:\n${uniqueIssues.map((issue, i) => {
-      const snippet = ISSUE_RESPONSE_SNIPPETS[issue] || ISSUE_RESPONSE_SNIPPETS.general;
-      return `${i + 1}. ${snippet.label}: [AGENT: one-line summary of resolution/next step]`;
-    }).join('\n')}`;
+  // Priority order: service-impacting first, then financial, then pending, then informational
+  const priorityOrder = ['network', 'esim', 'payment', 'billing', 'portin', 'account', 'airvet', 'general'];
+
+  // Group tickets by issue and collect customer messages per issue
+  const issueGroups = {};
+  for (const [ticketId, category] of Object.entries(issueThreads)) {
+    if (!issueGroups[category]) {
+      issueGroups[category] = { tickets: [], customerMessages: [] };
+    }
+    const ticket = allTickets.find(t => String(t.id) === String(ticketId));
+    if (ticket) {
+      issueGroups[category].tickets.push(ticket);
+    }
+    // Use actual comments if available (preferred — avoids double-counting subject+description)
+    if (ticketComments && ticketComments[ticketId]) {
+      const customerMsgs = ticketComments[ticketId].filter(c => c.isCustomer);
+      if (customerMsgs.length > 0) {
+        for (const comment of customerMsgs) {
+          issueGroups[category].customerMessages.push(comment.body);
+        }
+      } else if (ticket) {
+        // Fallback: use subject + description if no customer comments found
+        issueGroups[category].customerMessages.push(
+          `${ticket.subject || ''} ${ticket.description || ''}`
+        );
+      }
+    } else if (ticket) {
+      // No comments data — fall back to subject + description
+      issueGroups[category].customerMessages.push(
+        `${ticket.subject || ''} ${ticket.description || ''}`
+      );
+    }
   }
 
-  return `## DRAFT CUSTOMER RESPONSE
-**Review, fill in [AGENT: ...] placeholders, then send as public reply.**
+  // Sort issues by priority
+  const sortedIssues = Object.keys(issueGroups).sort(
+    (a, b) => priorityOrder.indexOf(a) - priorityOrder.indexOf(b)
+  );
+
+  // Build response sections
+  const sections = sortedIssues.map(issue => {
+    const template = ISSUE_TEMPLATES[issue] || ISSUE_TEMPLATES.general;
+    return template.buildSection(issueGroups[issue].customerMessages);
+  });
+
+  const issueCount = sortedIssues.length;
+  const ticketCount = allTickets.length;
+
+  // Build next steps summary for multi-issue
+  let nextStepsSummary = '';
+  if (issueCount > 1) {
+    nextStepsSummary = `\n**Quick summary of what happens next:**\n${sortedIssues.map((issue, i) => {
+      const label = (ISSUE_TEMPLATES[issue] || ISSUE_TEMPLATES.general).label;
+      const dupCount = issueGroups[issue].tickets.length;
+      const dupNote = dupCount > 1 ? ` (you reported this ${dupCount} times — all consolidated here)` : '';
+      return `${i + 1}. **${label}${dupNote}** — see details above`;
+    }).join('\n')}\n`;
+  }
+
+  // Apology note if customer contacted multiple times
+  const apologyNote = ticketCount > 2
+    ? `\n\nI can see you've reached out ${ticketCount} times — I sincerely apologize that it took multiple contacts to get this handled. I've consolidated everything so you have one point of contact from here on out.\n`
+    : ticketCount === 2
+    ? `\n\nI noticed you reached out a couple of times — I've consolidated your requests so I can handle everything in one place for you.\n`
+    : '';
+
+  const draft = `## DRAFT CUSTOMER RESPONSE — READY TO REVIEW & SEND
 
 ---
 
-Subject: Update on your Meow Mobile support requests
+Subject: Update on your Meow Mobile support request${issueCount > 1 ? 's' : ''}
 
 Hi ${name},
 
-Thank you for reaching out to us. I've reviewed all of your recent messages and I want to address everything in one place so you have a clear picture.
+Thank you for contacting Meow Mobile Support. I've reviewed ${issueCount > 1 ? 'all of your recent messages' : 'your message'} and want to give you a complete update.${apologyNote}
 
-${issueSections}
-${nextSteps}
+${sections.join('\n\n---\n\n')}
 
-If anything doesn't look right or you have additional questions, just reply to this email — I'm personally handling your case and will make sure everything is resolved.
+${nextStepsSummary}
+I'm personally handling your case — you won't need to explain anything again. If anything doesn't look right or you have questions, just reply to this email and I'll take care of it.
 
 Best,
-[AGENT: your name]
+[AGENT NAME]
 Meow Mobile Support
 
 ---
-**Instructions:** Copy the text between the lines above, fill in all [AGENT: ...] placeholders with actual details, then paste as a public reply on this ticket.`;
+
+**AGENT INSTRUCTIONS:**
+1. Review the draft above. It's based on the customer's actual messages.
+2. Replace **[AGENT NAME]** with your name.
+3. If you have access to account data (eSIM status, payment records, etc.), update the relevant sections with specifics.
+4. Once reviewed, copy everything between the --- lines and send as a **public reply**.`;
+
+  return draft;
 }
 
 // ─────────────────────────────────────────────
@@ -385,10 +535,28 @@ async function executeMerge(requesterEmail) {
   // Identify unique issues for the agent checklist
   const uniqueIssues = [...new Set(Object.values(issueThreads))];
 
+  // Collect all ticket comments for draft response generation
+  const ticketComments = {};
+
+  // Fetch target ticket comments first
+  const targetComments = await zendesk.getTicketComments(targetTicket.id);
+  ticketComments[targetTicket.id] = targetComments.map(c => ({
+    body: c.body || '',
+    isCustomer: c.author_id === targetTicket.requester_id,
+    created_at: c.created_at
+  }));
+
   // Copy comments from each source ticket as internal notes on target
   for (const source of sourceTickets) {
     const comments = await zendesk.getTicketComments(source.id);
     const category = issueThreads[source.id] || 'general';
+
+    // Store for draft response
+    ticketComments[source.id] = comments.map(c => ({
+      body: c.body || '',
+      isCustomer: c.author_id === source.requester_id,
+      created_at: c.created_at
+    }));
 
     const commentHistory = comments.map(c => {
       const author = c.author_id === source.requester_id ? 'Customer' : 'Agent';
@@ -453,9 +621,25 @@ The outbound gate will verify that all issues are addressed before allowing send
     );
   }
 
+  // Fetch requester name (search results don't include requester.name)
+  let customerName = 'there';
+  try {
+    const fullTarget = await zendesk.getTicket(targetTicket.id);
+    if (fullTarget.requester?.name) {
+      customerName = fullTarget.requester.name;
+    } else if (fullTarget.requester_id) {
+      // Try to get user info via API
+      const userData = await zendesk.zendeskRequest(`/users/${fullTarget.requester_id}.json`);
+      if (userData?.user?.name) {
+        customerName = userData.user.name;
+      }
+    }
+  } catch (e) {
+    console.warn(`[REACTIVE] Could not fetch requester name: ${e.message}`);
+  }
+
   // Generate draft customer response covering all issues
-  const customerName = targetTicket.requester?.name || targetTicket.requester_id || 'there';
-  const draftResponse = buildDraftResponse(customerName, issueThreads, allTickets);
+  const draftResponse = buildDraftResponse(customerName, issueThreads, allTickets, ticketComments);
   await zendesk.addInternalNote(targetTicket.id, draftResponse);
 
   // Close source tickets (pending → solved to handle Zendesk status transition rules)
@@ -475,7 +659,7 @@ The outbound gate will verify that all issues are addressed before allowing send
       status: 'solved',
       custom_fields: [
         { id: 44720831858075, value: 'non_user____test_ticket' },
-        { id: 44720870291483, value: 'merged' }
+        { id: 44720870291483, value: '0000000000' }
       ]
     });
   }
