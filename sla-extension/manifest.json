@@ -1,0 +1,18 @@
+{
+  "manifest_version": 3,
+  "name": "Zendesk SLA Sidebar",
+  "version": "1.0.0",
+  "description": "Live SLA timer sidebar for Zendesk tickets — tracks 1st response, next response, resolution, internal handoff, and partner SLAs.",
+  "content_scripts": [
+    {
+      "matches": ["https://*.zendesk.com/*"],
+      "js": ["content.js"],
+      "css": ["styles.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "icons": {
+    "48": "icon48.png",
+    "128": "icon128.png"
+  }
+}
