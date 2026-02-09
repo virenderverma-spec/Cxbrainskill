@@ -23,20 +23,22 @@
   };
 
   var SLA_TARGETS = {
+    // L0: 1 hour first response across all priorities
     L0: {
-      urgent: { firstResponse: 60,   nextResponse: 240,  resolution: 480 },
-      high:   { firstResponse: 240,  nextResponse: 480,  resolution: 1440 },
-      normal: { firstResponse: 480,  nextResponse: 720,  resolution: 2880 },
-      low:    { firstResponse: 1440, nextResponse: 1440, resolution: 4320 }
+      urgent: { firstResponse: 60, nextResponse: 240,  resolution: 480 },
+      high:   { firstResponse: 60, nextResponse: 480,  resolution: 1440 },
+      normal: { firstResponse: 60, nextResponse: 720,  resolution: 2880 },
+      low:    { firstResponse: 60, nextResponse: 1440, resolution: 4320 }
     },
+    // L1-3: 2 hour first response across all priorities
     L1: {
-      urgent: { firstResponse: 60,   nextResponse: 240,  resolution: 1440,  internalHandoff: 120 },
-      high:   { firstResponse: 240,  nextResponse: 480,  resolution: 2880,  internalHandoff: 240 },
-      normal: { firstResponse: 480,  nextResponse: 720,  resolution: 5760,  internalHandoff: 480 },
-      low:    { firstResponse: 1440, nextResponse: 1440, resolution: 10080, internalHandoff: 1440 }
+      urgent: { firstResponse: 120, nextResponse: 240,  resolution: 1440,  internalHandoff: 120 },
+      high:   { firstResponse: 120, nextResponse: 480,  resolution: 2880,  internalHandoff: 240 },
+      normal: { firstResponse: 120, nextResponse: 720,  resolution: 5760,  internalHandoff: 480 },
+      low:    { firstResponse: 120, nextResponse: 1440, resolution: 10080, internalHandoff: 1440 }
     },
-    L2: null,
-    L3: null,
+    L2: null, // inherits L1
+    L3: null, // inherits L1
 
     partner: {
       connectx: {
@@ -270,6 +272,7 @@
       var targets = getTargets(tier, priority);
       var now = Date.now();
       var createdAt = new Date(ticket.created_at).getTime();
+      var displayGroupName = groupName || 'Unassigned';
 
       // ── Build SLA metrics ──────────────────────────────
 
@@ -365,7 +368,7 @@
       }
 
       // ── Render ────────────────────────────────────────
-      renderMetrics(panel, slaMetrics, path, tier, priority, ticket.status);
+      renderMetrics(panel, slaMetrics, path, tier, priority, ticket.status, displayGroupName);
 
       // ── Live countdown ────────────────────────────────
       _slaInterval = setInterval(function() {
@@ -410,15 +413,37 @@
     return panel;
   }
 
-  function renderMetrics(panel, metrics, path, tier, priority, ticketStatus) {
+  function renderMetrics(panel, metrics, path, tier, priority, ticketStatus, groupName) {
     var body = panel.querySelector('.sla-w-body');
+    var header = panel.querySelector('.sla-w-header');
     var html = '';
 
-    var pathClass = tier === 'L0' ? 'sla-w-badge-blue' : (path.indexOf('Partner') === 0 ? 'sla-w-badge-purple' : 'sla-w-badge-orange');
+    // Color the header gradient based on ticket path
+    var isSolved = ticketStatus === 'solved' || ticketStatus === 'closed';
+    var isPartner = path.indexOf('Partner') === 0;
+    var isEscalated = tier !== 'L0';
+
+    if (isSolved) {
+      header.style.background = 'linear-gradient(135deg, #038153, #025a3a)';
+    } else if (isPartner) {
+      header.style.background = 'linear-gradient(135deg, #6a27b8, #4a1a80)';
+    } else if (isEscalated) {
+      header.style.background = 'linear-gradient(135deg, #c96400, #8f4700)';
+    } else {
+      header.style.background = 'linear-gradient(135deg, #1f73b7, #144a75)';
+    }
+
+    // Current location: group name
+    html += '<div style="margin-bottom:10px;font-size:11px;color:#68737d;">' +
+      'Assigned to: <strong style="color:#2f3941;">' + (groupName || 'Unassigned') + '</strong>' +
+    '</div>';
+
+    var pathClass = tier === 'L0' ? 'sla-w-badge-blue' : (isPartner ? 'sla-w-badge-purple' : 'sla-w-badge-orange');
     html += '<div class="sla-w-meta">' +
       '<span class="sla-w-badge ' + pathClass + '">' + path + '</span>' +
       '<span class="sla-w-badge sla-w-badge-gray">' + priority.toUpperCase() + '</span>' +
-      (ticketStatus === 'solved' || ticketStatus === 'closed' ? '<span class="sla-w-badge sla-w-badge-green">SOLVED</span>' : '') +
+      '<span class="sla-w-badge sla-w-badge-gray">SLA: ' + (tier === 'L0' ? '1h' : '2h') + '</span>' +
+      (isSolved ? '<span class="sla-w-badge sla-w-badge-green">SOLVED</span>' : '') +
     '</div>';
 
     var coreLabels = { '1st Response': 1, 'Next Response': 1, 'Resolution': 1 };

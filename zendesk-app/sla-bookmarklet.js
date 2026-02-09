@@ -35,21 +35,22 @@
 
   // SLA targets in MINUTES per tier and priority
   var SLA_TARGETS = {
+    // L0: 1 hour first response across all priorities
     L0: {
-      urgent: { firstResponse: 60,   nextResponse: 240,  resolution: 480 },
-      high:   { firstResponse: 240,  nextResponse: 480,  resolution: 1440 },
-      normal: { firstResponse: 480,  nextResponse: 720,  resolution: 2880 },
-      low:    { firstResponse: 1440, nextResponse: 1440, resolution: 4320 }
+      urgent: { firstResponse: 60, nextResponse: 240,  resolution: 480 },
+      high:   { firstResponse: 60, nextResponse: 480,  resolution: 1440 },
+      normal: { firstResponse: 60, nextResponse: 720,  resolution: 2880 },
+      low:    { firstResponse: 60, nextResponse: 1440, resolution: 4320 }
     },
+    // L1-3: 2 hour first response across all priorities
     L1: {
-      urgent: { firstResponse: 60,   nextResponse: 240,  resolution: 1440,  internalHandoff: 120 },
-      high:   { firstResponse: 240,  nextResponse: 480,  resolution: 2880,  internalHandoff: 240 },
-      normal: { firstResponse: 480,  nextResponse: 720,  resolution: 5760,  internalHandoff: 480 },
-      low:    { firstResponse: 1440, nextResponse: 1440, resolution: 10080, internalHandoff: 1440 }
+      urgent: { firstResponse: 120, nextResponse: 240,  resolution: 1440,  internalHandoff: 120 },
+      high:   { firstResponse: 120, nextResponse: 480,  resolution: 2880,  internalHandoff: 240 },
+      normal: { firstResponse: 120, nextResponse: 720,  resolution: 5760,  internalHandoff: 480 },
+      low:    { firstResponse: 120, nextResponse: 1440, resolution: 10080, internalHandoff: 1440 }
     },
-    // L2/L3 inherit L1 targets (override below if needed)
-    L2: null,
-    L3: null,
+    L2: null, // inherits L1
+    L3: null, // inherits L1
 
     // Partner-specific SLAs (in minutes)
     // ConnectX: severity mapped from ticket priority (urgent→S1, high→S2, normal→S3, low→S4)

@@ -550,304 +550,391 @@ function showNotification(message, type) {
   }, 2500);
 }
 
-// ─── SLA Timer ────────────────────────────────────────────────
+// ─── SLA Engine ───────────────────────────────────────────────
 
-/**
- * Toggle SLA section collapse
- */
-function toggleSla() {
-  document.getElementById('sla-section').classList.toggle('collapsed');
+var SLA_TARGETS = {
+  L0: {
+    urgent: { firstResponse: 60, nextResponse: 240, resolution: 480 },
+    high:   { firstResponse: 60, nextResponse: 480, resolution: 1440 },
+    normal: { firstResponse: 60, nextResponse: 720, resolution: 2880 },
+    low:    { firstResponse: 60, nextResponse: 1440, resolution: 4320 }
+  },
+  L1: {
+    urgent: { firstResponse: 120, nextResponse: 240, resolution: 1440, internalHandoff: 120 },
+    high:   { firstResponse: 120, nextResponse: 480, resolution: 2880, internalHandoff: 240 },
+    normal: { firstResponse: 120, nextResponse: 720, resolution: 5760, internalHandoff: 480 },
+    low:    { firstResponse: 120, nextResponse: 1440, resolution: 10080, internalHandoff: 1440 }
+  },
+  L2: null,
+  L3: null,
+  partner: {
+    connectx: {
+      urgent: { partnerResponse: 15, resolution: 60 },
+      high:   { partnerResponse: 30, resolution: 240 },
+      normal: { partnerResponse: 240, resolution: 4320 },
+      low:    { partnerResponse: 480, resolution: null }
+    },
+    airvet: {
+      weekday: { resolution: 1440 },
+      weekend: { resolution: 2880 }
+    },
+    att: {
+      urgent: { partnerResponse: null, resolution: null },
+      high:   { partnerResponse: null, resolution: null },
+      normal: { partnerResponse: null, resolution: null },
+      low:    { partnerResponse: null, resolution: null }
+    }
+  }
+};
+
+var GROUP_TIER_KEYWORDS = {
+  'l0': 'L0', 'tier 0': 'L0', 'tier0': 'L0', 'level 0': 'L0',
+  'l1': 'L1', 'tier 1': 'L1', 'tier1': 'L1', 'level 1': 'L1',
+  'l2': 'L2', 'tier 2': 'L2', 'tier2': 'L2', 'level 2': 'L2',
+  'l3': 'L3', 'tier 3': 'L3', 'tier3': 'L3', 'level 3': 'L3', 'engineering': 'L3'
+};
+
+var PARTNER_NAMES = { att: 'AT&T', connectx: 'ConnectX', airvet: 'Airvet' };
+
+function detectTier(groupName) {
+  if (!groupName) return 'L0';
+  var lower = groupName.toLowerCase();
+  var keys = Object.keys(GROUP_TIER_KEYWORDS);
+  for (var i = 0; i < keys.length; i++) {
+    if (lower.indexOf(keys[i]) !== -1) return GROUP_TIER_KEYWORDS[keys[i]];
+  }
+  return 'L0';
+}
+
+function getSlaTargets(tier, priority) {
+  var p = (priority || 'normal').toLowerCase();
+  var t = SLA_TARGETS[tier] || SLA_TARGETS.L1 || SLA_TARGETS.L0;
+  return t[p] || t.normal;
+}
+
+function getPartnerTargets(partner, priority) {
+  var cfg = SLA_TARGETS.partner[partner];
+  if (!cfg) return null;
+  if (cfg.weekday || cfg.weekend) {
+    var day = new Date().getDay();
+    return (day === 0 || day === 6) ? cfg.weekend : cfg.weekday;
+  }
+  var p = (priority || 'normal').toLowerCase();
+  return cfg[p] || cfg.normal || null;
+}
+
+function formatDuration(ms) {
+  var totalSec = Math.floor(Math.abs(ms) / 1000);
+  var d = Math.floor(totalSec / 86400);
+  var h = Math.floor((totalSec % 86400) / 3600);
+  var m = Math.floor((totalSec % 3600) / 60);
+  var s = totalSec % 60;
+  if (d > 0) return d + 'd ' + h + 'h ' + m + 'm';
+  if (h > 0) return h + 'h ' + m + 'm ' + s + 's';
+  return m + 'm ' + s + 's';
+}
+
+function slaPct(elapsedMs, targetMs) {
+  if (targetMs <= 0) return 100;
+  return Math.min((elapsedMs / targetMs) * 100, 100);
+}
+
+function slaStatus(elapsedMs, targetMs) {
+  if (elapsedMs >= targetMs) return 'breached';
+  var p = slaPct(elapsedMs, targetMs);
+  if (p > 85) return 'red';
+  if (p > 60) return 'amber';
+  return 'green';
+}
+
+function slaTimeText(m) {
+  if (m.met) return 'Met' + (m.elapsedMs > 0 ? ' (' + formatDuration(m.elapsedMs) + ')' : '');
+  if (m.elapsedMs >= m.targetMs) return 'BREACHED ' + formatDuration(m.elapsedMs - m.targetMs) + ' ago';
+  return formatDuration(m.targetMs - m.elapsedMs) + ' left';
+}
+
+function computeNextResponse(comments, requesterId) {
+  var lastCustomerMsg = null;
+  var agentRepliedAfter = false;
+  for (var i = comments.length - 1; i >= 0; i--) {
+    var c = comments[i];
+    // ZAF comments have author.role; API comments have author_id
+    var isCustomer = c.author ? (c.author.role === 'end-user' || c.author.role === 'end_user') : (c.author_id === requesterId);
+    var isPublic = c.public !== false;
+    if (!isPublic) continue;
+    if (!lastCustomerMsg && isCustomer) {
+      lastCustomerMsg = c;
+      agentRepliedAfter = false;
+    } else if (lastCustomerMsg && !isCustomer) {
+      agentRepliedAfter = true;
+      break;
+    }
+  }
+  if (!lastCustomerMsg) return null;
+  if (agentRepliedAfter) return { met: true };
+  return { met: false, since: new Date(lastCustomerMsg.created_at).getTime() };
+}
+
+async function findPartnerFieldId() {
+  try {
+    var data = await client.request({ url: '/api/v2/ticket_fields.json?page[size]=100', type: 'GET', dataType: 'json' });
+    var fields = data.ticket_fields || [];
+    for (var i = 0; i < fields.length; i++) {
+      var title = (fields[i].title || '').toLowerCase();
+      if (title.indexOf('partner') !== -1 && title.indexOf('escalat') !== -1) return fields[i].id;
+      if (title === 'partner escalation') return fields[i].id;
+    }
+  } catch (e) {}
+  return null;
+}
+
+async function findEscalationTimestamp(ticketId) {
+  try {
+    var data = await client.request({ url: '/api/v2/tickets/' + ticketId + '/audits.json?page[size]=100', type: 'GET', dataType: 'json' });
+    var audits = data.audits || [];
+    for (var i = audits.length - 1; i >= 0; i--) {
+      var events = audits[i].events || [];
+      for (var j = 0; j < events.length; j++) {
+        if (events[j].field_name === 'group_id' && events[j].previous_value) {
+          return new Date(audits[i].created_at).getTime();
+        }
+      }
+    }
+  } catch (e) {}
+  return null;
 }
 
 /**
- * Fetch SLA / ticket metrics and render the timer
+ * Full SLA data load — fetches ticket, metrics, comments, group, partner field
  */
 async function loadSlaData() {
   var ticketId = currentTicket.ticketId;
   if (!ticketId) return;
 
   try {
-    var res = await client.request({
-      url: '/api/v2/tickets/' + ticketId + '/metrics.json',
-      type: 'GET',
-      dataType: 'json'
-    });
+    var partnerFieldId = await findPartnerFieldId();
 
-    var m = res.ticket_metric;
-    if (!m) {
-      renderNoSla();
-      return;
+    var results = await Promise.all([
+      client.request({ url: '/api/v2/tickets/' + ticketId + '.json', type: 'GET', dataType: 'json' }),
+      client.request({ url: '/api/v2/tickets/' + ticketId + '/metrics.json', type: 'GET', dataType: 'json' }),
+      client.request({ url: '/api/v2/tickets/' + ticketId + '/comments.json?sort_order=asc', type: 'GET', dataType: 'json' })
+    ]);
+
+    var ticket = results[0].ticket;
+    var metrics = results[1].ticket_metric;
+    var comments = results[2].comments || [];
+
+    // Detect group & tier
+    var groupName = '';
+    if (ticket.group_id) {
+      try {
+        var gData = await client.request({ url: '/api/v2/groups/' + ticket.group_id + '.json', type: 'GET', dataType: 'json' });
+        groupName = gData.group.name || '';
+      } catch (e) {}
+    }
+    var tier = detectTier(groupName);
+
+    // Detect partner
+    var partner = null;
+    if (partnerFieldId && ticket.custom_fields) {
+      for (var fi = 0; fi < ticket.custom_fields.length; fi++) {
+        var cf = ticket.custom_fields[fi];
+        if (cf.id === partnerFieldId && cf.value) { partner = cf.value.toLowerCase(); break; }
+      }
+    }
+    var partnerName = partner ? (PARTNER_NAMES[partner] || partner) : null;
+
+    // Path
+    var path, pathClass;
+    var isSolved = ticket.status === 'solved' || ticket.status === 'closed';
+    if (isSolved) {
+      path = 'Solved'; pathClass = 'sla-badge-green';
+    } else if (partner) {
+      path = 'Partner \u2192 ' + partnerName; pathClass = 'sla-badge-purple';
+    } else if (tier !== 'L0') {
+      path = 'Escalated \u2192 ' + tier; pathClass = 'sla-badge-orange';
+    } else {
+      path = 'L0 Direct'; pathClass = 'sla-badge-blue';
     }
 
-    var metrics = buildSlaMetrics(m);
-
-    if (metrics.length === 0) {
-      renderNoSla();
-      return;
+    // Header gradient
+    var header = document.getElementById('app-header');
+    if (isSolved) {
+      header.style.background = 'linear-gradient(135deg, #038153, #025a3a)';
+    } else if (partner) {
+      header.style.background = 'linear-gradient(135deg, #6a27b8, #4a1a80)';
+    } else if (tier !== 'L0') {
+      header.style.background = 'linear-gradient(135deg, #c96400, #8f4700)';
+    } else {
+      header.style.background = 'linear-gradient(135deg, #1f73b7, #144a75)';
     }
 
-    renderSlaMetrics(metrics);
-    startSlaCountdown(metrics);
+    var priority = ticket.priority || 'normal';
+    var targets = getSlaTargets(tier, priority);
+    var now = Date.now();
+    var createdAt = new Date(ticket.created_at).getTime();
+
+    // ── Build SLA metrics ────────────────────────────────
+
+    var slaMetrics = [];
+
+    // 1. First Response
+    var replyMetric = metrics ? metrics.reply_time_in_minutes : null;
+    if (replyMetric) {
+      var replySrc = replyMetric.business || replyMetric.calendar;
+      if (replySrc) {
+        var frTarget = (targets.firstResponse || 60) * 60000;
+        if (replySrc.breach_at) {
+          var ba = new Date(replySrc.breach_at).getTime();
+          var rem = ba - now;
+          slaMetrics.push({ label: '1st Response', targetMs: frTarget, elapsedMs: Math.max(frTarget - Math.max(rem, 0), 0), breachAt: ba, met: false });
+        } else if (replySrc.elapsed !== undefined && replySrc.elapsed !== null) {
+          slaMetrics.push({ label: '1st Response', targetMs: frTarget, elapsedMs: replySrc.elapsed * 60000, breachAt: null, met: true });
+        }
+      }
+    }
+    if (!slaMetrics.length) {
+      var frT = (targets.firstResponse || 60) * 60000;
+      slaMetrics.push({ label: '1st Response', targetMs: frT, elapsedMs: now - createdAt, breachAt: createdAt + frT, met: false });
+    }
+
+    // 2. Next Response
+    var nextResp = computeNextResponse(comments, ticket.requester_id);
+    var nrTarget = (targets.nextResponse || 720) * 60000;
+    if (nextResp) {
+      if (nextResp.met) {
+        slaMetrics.push({ label: 'Next Response', targetMs: nrTarget, elapsedMs: 0, breachAt: null, met: true });
+      } else {
+        var nrEl = now - nextResp.since;
+        slaMetrics.push({ label: 'Next Response', targetMs: nrTarget, elapsedMs: nrEl, breachAt: nextResp.since + nrTarget, met: false });
+      }
+    }
+
+    // 3. Resolution
+    var resMetric = metrics ? metrics.full_resolution_time_in_minutes : null;
+    var resTarget = (targets.resolution || 2880) * 60000;
+    if (resMetric) {
+      var resSrc = resMetric.business || resMetric.calendar;
+      if (resSrc && resSrc.breach_at) {
+        var rba = new Date(resSrc.breach_at).getTime();
+        slaMetrics.push({ label: 'Resolution', targetMs: resTarget, elapsedMs: Math.max(resTarget - Math.max(rba - now, 0), 0), breachAt: rba, met: false });
+      } else if (resSrc && resSrc.elapsed !== undefined) {
+        slaMetrics.push({ label: 'Resolution', targetMs: resTarget, elapsedMs: resSrc.elapsed * 60000, breachAt: null, met: isSolved });
+      }
+    }
+    if (!slaMetrics.find(function(m) { return m.label === 'Resolution'; })) {
+      slaMetrics.push({ label: 'Resolution', targetMs: resTarget, elapsedMs: now - createdAt, breachAt: createdAt + resTarget, met: isSolved });
+    }
+
+    // 4. Internal Handoff (L1-3)
+    if (tier !== 'L0' && targets.internalHandoff) {
+      var escTs = await findEscalationTimestamp(ticketId);
+      if (escTs) {
+        var ihTarget = targets.internalHandoff * 60000;
+        var ihElapsed = now - escTs;
+        var repliedAfterEsc = false;
+        for (var ci = 0; ci < comments.length; ci++) {
+          var ct = new Date(comments[ci].created_at).getTime();
+          var isAgent = comments[ci].author_id !== ticket.requester_id;
+          if (ct > escTs && isAgent && comments[ci].public !== false) {
+            repliedAfterEsc = true;
+            ihElapsed = ct - escTs;
+            break;
+          }
+        }
+        slaMetrics.push({ label: tier + ' Handoff', targetMs: ihTarget, elapsedMs: ihElapsed, breachAt: repliedAfterEsc ? null : escTs + ihTarget, met: repliedAfterEsc });
+      }
+    }
+
+    // 5. Partner SLAs
+    if (partner && SLA_TARGETS.partner[partner]) {
+      var pTargets = getPartnerTargets(partner, priority);
+      var pStart = await findEscalationTimestamp(ticketId) || createdAt;
+      var pElapsed = now - pStart;
+      if (pTargets && pTargets.partnerResponse) {
+        var prT = pTargets.partnerResponse * 60000;
+        slaMetrics.push({ label: partnerName + ' Response', targetMs: prT, elapsedMs: pElapsed, breachAt: pStart + prT, met: false });
+      }
+      if (pTargets && pTargets.resolution) {
+        var prR = pTargets.resolution * 60000;
+        slaMetrics.push({ label: partnerName + ' Resolve', targetMs: prR, elapsedMs: pElapsed, breachAt: pStart + prR, met: isSolved });
+      }
+      if (pTargets && !pTargets.partnerResponse && !pTargets.resolution) {
+        slaMetrics.push({ label: partnerName + ' SLA', targetMs: 0, elapsedMs: 0, breachAt: null, met: false, placeholder: true });
+      }
+    }
+
+    // ── Render ────────────────────────────────────────────
+    renderSlaSection(slaMetrics, groupName || 'Unassigned', path, pathClass, tier, priority, isSolved);
+
+    // ── Live countdown ───────────────────────────────────
+    if (slaTimerInterval) clearInterval(slaTimerInterval);
+    slaTimerInterval = setInterval(function() {
+      var n = Date.now();
+      slaMetrics.forEach(function(m) {
+        if (m.met || !m.breachAt) return;
+        m.elapsedMs = m.targetMs - Math.max(m.breachAt - n, 0);
+        if (m.elapsedMs > m.targetMs) m.elapsedMs = n - (m.breachAt - m.targetMs);
+      });
+      updateSlaBars(slaMetrics);
+    }, 1000);
+
   } catch (err) {
-    console.error('SLA fetch error:', err);
-    renderNoSla();
+    console.error('SLA load error:', err);
+    document.getElementById('sla-content').innerHTML = '<div class="sla-no-policy">Unable to load SLA data</div>';
   }
 }
 
-/**
- * Build an array of SLA metric objects from the ticket_metric response
- */
-function buildSlaMetrics(m) {
-  var metrics = [];
-
-  // First Reply Time
-  var reply = m.reply_time_in_minutes;
-  if (reply) {
-    var replyMetric = parseSlaMetric(reply, 'First Response');
-    if (replyMetric) metrics.push(replyMetric);
-  }
-
-  // Full Resolution Time
-  var resolution = m.full_resolution_time_in_minutes;
-  if (resolution) {
-    var resMetric = parseSlaMetric(resolution, 'Resolution');
-    if (resMetric) metrics.push(resMetric);
-  }
-
-  return metrics;
-}
-
-/**
- * Parse a single SLA metric block (calendar or business) into a renderable object.
- * Uses business hours if available, falls back to calendar.
- */
-function parseSlaMetric(metricBlock, label) {
-  // Prefer business, fall back to calendar
-  var src = metricBlock.business || metricBlock.calendar;
-  if (!src) return null;
-
-  // If there's no breach_at timestamp and no elapsed time, SLA not active
-  if (!src.breach_at && (src.elapsed === undefined || src.elapsed === null) && (src.calendar === undefined)) {
-    return null;
-  }
-
-  var now = Date.now();
-  var breachAt = src.breach_at ? new Date(src.breach_at).getTime() : null;
-
-  // Already fulfilled (e.g. already replied)
-  if (src.elapsed !== undefined && src.elapsed !== null && !breachAt) {
-    return {
-      label: label,
-      status: 'met',
-      percentage: 100,
-      timeText: 'Met',
-      remainingMs: 0
-    };
-  }
-
-  if (!breachAt) return null;
-
-  // Calculate based on created_at of the metric for the target window
-  var remainingMs = breachAt - now;
-  var breached = remainingMs <= 0;
-
-  // We need to estimate total target to compute percentage.
-  // Target = elapsed minutes so far (converted to ms) + remaining
-  var elapsedMs = (src.elapsed || 0) * 60 * 1000;
-  var totalMs = elapsedMs + Math.max(remainingMs, 0);
-
-  // Guard against division by zero
-  var percentage = totalMs > 0 ? Math.min((elapsedMs / totalMs) * 100, 100) : 100;
-
-  if (breached) {
-    percentage = 100;
-  }
-
-  var status;
-  if (breached) {
-    status = 'breached';
-  } else if (percentage > 85) {
-    status = 'red';
-  } else if (percentage > 60) {
-    status = 'amber';
-  } else {
-    status = 'green';
-  }
-
-  return {
-    label: label,
-    status: status,
-    percentage: percentage,
-    timeText: breached ? 'BREACHED ' + formatDuration(Math.abs(remainingMs)) + ' ago' : formatDuration(remainingMs) + ' left',
-    remainingMs: remainingMs,
-    breachAt: breachAt,
-    elapsedMs: elapsedMs,
-    totalMs: totalMs
-  };
-}
-
-/**
- * Format a millisecond duration as human-readable countdown
- */
-function formatDuration(ms) {
-  var totalSec = Math.floor(ms / 1000);
-  var days = Math.floor(totalSec / 86400);
-  var hours = Math.floor((totalSec % 86400) / 3600);
-  var mins = Math.floor((totalSec % 3600) / 60);
-  var secs = totalSec % 60;
-
-  if (days > 0) {
-    return days + 'd ' + hours + 'h ' + mins + 'm';
-  }
-  if (hours > 0) {
-    return hours + 'h ' + mins + 'm ' + secs + 's';
-  }
-  return mins + 'm ' + secs + 's';
-}
-
-/**
- * Render the SLA metric bars into the DOM
- */
-function renderSlaMetrics(metrics) {
-  var container = document.getElementById('sla-metrics-container');
+function renderSlaSection(metrics, groupName, path, pathClass, tier, priority, isSolved) {
+  var container = document.getElementById('sla-content');
   var html = '';
 
+  html += '<div class="sla-group-line">Assigned to: <strong>' + groupName + '</strong></div>';
+
+  html += '<div class="sla-badges">' +
+    '<span class="sla-badge ' + pathClass + '">' + path + '</span>' +
+    '<span class="sla-badge sla-badge-gray">' + (priority || 'normal').toUpperCase() + '</span>' +
+    '<span class="sla-badge sla-badge-gray">SLA: ' + (tier === 'L0' ? '1h' : '2h') + '</span>' +
+    (isSolved ? '<span class="sla-badge sla-badge-green">SOLVED</span>' : '') +
+  '</div>';
+
+  var coreLabels = { '1st Response': 1, 'Next Response': 1, 'Resolution': 1 };
+  var coreDone = false;
+
   metrics.forEach(function(m) {
-    html +=
-      '<div class="sla-metric sla-status-' + m.status + '" data-label="' + m.label + '">' +
-        '<div class="sla-metric-header">' +
-          '<span class="sla-metric-label">' + m.label + '</span>' +
-          '<span class="sla-metric-time">' + m.timeText + '</span>' +
-        '</div>' +
-        '<div class="sla-bar-bg">' +
-          '<div class="sla-bar-fill" style="width: ' + m.percentage + '%"></div>' +
-        '</div>' +
-      '</div>';
+    if (!coreLabels[m.label] && !coreDone) {
+      html += '<div class="sla-divider"></div>';
+      coreDone = true;
+    }
+    if (m.placeholder) {
+      html += '<div class="sla-metric" data-label="' + m.label + '"><div class="sla-metric-header">' +
+        '<span class="sla-metric-label">' + m.label + '</span>' +
+        '<span class="sla-metric-time" style="color:#87929d">Not configured</span>' +
+      '</div></div>';
+      return;
+    }
+    var st = m.met ? 'met' : slaStatus(m.elapsedMs, m.targetMs);
+    var p = m.met ? 100 : slaPct(m.elapsedMs, m.targetMs);
+    html += '<div class="sla-metric sla-status-' + st + '" data-label="' + m.label + '">' +
+      '<div class="sla-metric-header">' +
+        '<span class="sla-metric-label">' + m.label + '</span>' +
+        '<span class="sla-metric-time">' + slaTimeText(m) + '</span>' +
+      '</div>' +
+      '<div class="sla-bar-bg"><div class="sla-bar-fill" style="width:' + p + '%"></div></div>' +
+    '</div>';
   });
 
   container.innerHTML = html;
-  updateOverallBadge(metrics);
 }
 
-/**
- * Update the badge next to "SLA Status" and the urgent timer in the collapsed header
- */
-function updateOverallBadge(metrics) {
-  var badge = document.getElementById('sla-overall-badge');
-  var urgentTimer = document.getElementById('sla-urgent-timer');
-
-  // Determine worst status across all metrics
-  var priority = { met: 0, green: 1, amber: 2, red: 3, breached: 4 };
-  var worst = metrics.reduce(function(w, m) {
-    return priority[m.status] > priority[w.status] ? m : w;
-  }, metrics[0]);
-
-  if (worst.status === 'breached') {
-    badge.textContent = 'BREACHED';
-    badge.className = 'sla-overall-badge sla-badge-red';
-  } else if (worst.status === 'red' || worst.status === 'amber') {
-    badge.textContent = 'AT RISK';
-    badge.className = 'sla-overall-badge sla-badge-amber';
-  } else if (worst.status === 'met') {
-    badge.textContent = 'MET';
-    badge.className = 'sla-overall-badge sla-badge-green';
-  } else {
-    badge.textContent = 'ON TRACK';
-    badge.className = 'sla-overall-badge sla-badge-green';
-  }
-
-  // Show the most urgent countdown in the collapsed header
-  var activeMetrics = metrics.filter(function(m) { return m.remainingMs !== 0; });
-  if (activeMetrics.length > 0) {
-    var mostUrgent = activeMetrics.reduce(function(a, b) {
-      return a.remainingMs < b.remainingMs ? a : b;
-    });
-    urgentTimer.textContent = mostUrgent.timeText;
-    urgentTimer.style.color = worst.status === 'breached' || worst.status === 'red' ? '#cc3340'
-      : worst.status === 'amber' ? '#c96400' : '#038153';
-  } else {
-    urgentTimer.textContent = '';
-  }
-}
-
-/**
- * Start a 1-second interval to update the countdown timers live
- */
-function startSlaCountdown(metrics) {
-  if (slaTimerInterval) clearInterval(slaTimerInterval);
-
-  // Only tick if there are active (non-met) metrics
-  var hasActive = metrics.some(function(m) { return m.breachAt; });
-  if (!hasActive) return;
-
-  slaTimerInterval = setInterval(function() {
-    var now = Date.now();
-    var updated = [];
-
-    metrics.forEach(function(m) {
-      if (!m.breachAt) {
-        updated.push(m);
-        return;
-      }
-
-      var remainingMs = m.breachAt - now;
-      var breached = remainingMs <= 0;
-      var elapsedMs = m.totalMs - Math.max(remainingMs, 0);
-      var percentage = m.totalMs > 0 ? Math.min((elapsedMs / m.totalMs) * 100, 100) : 100;
-
-      if (breached) percentage = 100;
-
-      var status;
-      if (breached) {
-        status = 'breached';
-      } else if (percentage > 85) {
-        status = 'red';
-      } else if (percentage > 60) {
-        status = 'amber';
-      } else {
-        status = 'green';
-      }
-
-      var timeText = breached
-        ? 'BREACHED ' + formatDuration(Math.abs(remainingMs)) + ' ago'
-        : formatDuration(remainingMs) + ' left';
-
-      updated.push({
-        label: m.label,
-        status: status,
-        percentage: percentage,
-        timeText: timeText,
-        remainingMs: remainingMs,
-        breachAt: m.breachAt,
-        elapsedMs: elapsedMs,
-        totalMs: m.totalMs
-      });
-    });
-
-    // Update DOM in place
-    updated.forEach(function(m) {
-      var el = document.querySelector('.sla-metric[data-label="' + m.label + '"]');
-      if (!el) return;
-
-      el.className = 'sla-metric sla-status-' + m.status;
-      el.querySelector('.sla-metric-time').textContent = m.timeText;
-      el.querySelector('.sla-bar-fill').style.width = m.percentage + '%';
-    });
-
-    updateOverallBadge(updated);
-
-    // Replace metrics array reference for next tick
-    metrics.splice(0, metrics.length);
-    updated.forEach(function(m) { metrics.push(m); });
-  }, 1000);
-}
-
-/**
- * Show "No SLA policy" fallback
- */
-function renderNoSla() {
-  var container = document.getElementById('sla-metrics-container');
-  container.innerHTML = '<div class="sla-no-policy">No SLA policy applied to this ticket</div>';
-  document.getElementById('sla-overall-badge').textContent = '';
-  document.getElementById('sla-urgent-timer').textContent = '';
+function updateSlaBars(metrics) {
+  metrics.forEach(function(m) {
+    if (m.placeholder) return;
+    var el = document.querySelector('.sla-metric[data-label="' + m.label + '"]');
+    if (!el) return;
+    var st = m.met ? 'met' : slaStatus(m.elapsedMs, m.targetMs);
+    el.className = 'sla-metric sla-status-' + st;
+    el.querySelector('.sla-metric-time').textContent = slaTimeText(m);
+    el.querySelector('.sla-bar-fill').style.width = (m.met ? 100 : slaPct(m.elapsedMs, m.targetMs)) + '%';
+  });
 }

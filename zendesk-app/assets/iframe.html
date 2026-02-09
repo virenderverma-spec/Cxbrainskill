@@ -311,62 +311,49 @@
       margin-bottom: 4px;
     }
 
-    /* SLA Timer Section */
+    /* SLA Section */
     .sla-section {
       background: #fff;
       border-bottom: 1px solid #d8dcde;
+      padding: 12px 16px;
     }
 
-    .sla-toggle {
+    .sla-group-line {
+      font-size: 11px;
+      color: #68737d;
+      margin-bottom: 8px;
+    }
+    .sla-group-line strong { color: #2f3941; }
+
+    .sla-badges {
       display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 10px 16px;
-      cursor: pointer;
-      user-select: none;
-      background: none;
-      border: none;
-      width: 100%;
-      font-family: inherit;
-      font-size: 12px;
-      font-weight: 600;
-      color: #2f3941;
-    }
-
-    .sla-toggle:hover {
-      background: #f8f9f9;
-    }
-
-    .sla-toggle-left {
-      display: flex;
-      align-items: center;
       gap: 6px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
     }
 
-    .sla-toggle .arrow {
+    .sla-badge {
       font-size: 10px;
-      transition: transform 0.2s;
+      padding: 3px 8px;
+      border-radius: 10px;
+      font-weight: 600;
     }
+    .sla-badge-blue   { background: #edf7ff; color: #1f73b7; }
+    .sla-badge-orange  { background: #fff5e6; color: #c96400; }
+    .sla-badge-purple  { background: #f3e8ff; color: #6a27b8; }
+    .sla-badge-gray    { background: #f0f2f3; color: #68737d; }
+    .sla-badge-green   { background: #edf8f4; color: #038153; }
 
-    .sla-section.collapsed .sla-body {
-      display: none;
-    }
-
-    .sla-section.collapsed .arrow {
-      transform: rotate(-90deg);
-    }
-
-    .sla-body {
-      padding: 0 16px 12px 16px;
+    .sla-divider {
+      height: 1px;
+      background: #e9ebed;
+      margin: 10px 0;
     }
 
     .sla-metric {
       margin-bottom: 10px;
     }
-
-    .sla-metric:last-child {
-      margin-bottom: 0;
-    }
+    .sla-metric:last-child { margin-bottom: 0; }
 
     .sla-metric-header {
       display: flex;
@@ -403,17 +390,13 @@
 
     .sla-status-green .sla-bar-fill { background: #038153; }
     .sla-status-green .sla-metric-time { color: #038153; }
-
     .sla-status-amber .sla-bar-fill { background: #c96400; }
     .sla-status-amber .sla-metric-time { color: #c96400; }
-
     .sla-status-red .sla-bar-fill { background: #cc3340; }
     .sla-status-red .sla-metric-time { color: #cc3340; }
-
     .sla-status-breached .sla-bar-fill { background: #cc3340; }
-    .sla-status-breached .sla-metric-time { color: #cc3340; }
+    .sla-status-breached .sla-metric-time { color: #cc3340; animation: sla-pulse 1.5s infinite; }
     .sla-status-breached .sla-metric-label { color: #cc3340; font-weight: 600; }
-
     .sla-status-met .sla-bar-fill { background: #038153; }
     .sla-status-met .sla-metric-time { color: #038153; }
 
@@ -424,26 +407,9 @@
       text-align: center;
     }
 
-    .sla-overall-badge {
-      font-size: 10px;
-      padding: 2px 6px;
-      border-radius: 8px;
-      font-weight: 600;
-    }
-
-    .sla-badge-green {
-      background: #edf8f4;
-      color: #038153;
-    }
-
-    .sla-badge-amber {
-      background: #fff5e6;
-      color: #c96400;
-    }
-
-    .sla-badge-red {
-      background: #fff0f1;
-      color: #cc3340;
+    @keyframes sla-pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: .5; }
     }
 
     /* Notification */
@@ -471,25 +437,15 @@
 </head>
 <body>
   <div class="container">
-    <!-- Header -->
-    <div class="header">
+    <!-- Header (gradient changes based on ticket path) -->
+    <div class="header" id="app-header">
       <h1>🐱 CS Copilot</h1>
     </div>
 
-    <!-- SLA Timer -->
+    <!-- SLA Section -->
     <div class="sla-section" id="sla-section">
-      <button class="sla-toggle" onclick="toggleSla()">
-        <span class="sla-toggle-left">
-          <span class="arrow">▼</span>
-          <span>SLA Status</span>
-          <span class="sla-overall-badge" id="sla-overall-badge"></span>
-        </span>
-        <span class="sla-metric-time" id="sla-urgent-timer"></span>
-      </button>
-      <div class="sla-body" id="sla-body">
-        <div id="sla-metrics-container">
-          <div class="sla-no-policy">Loading SLA data...</div>
-        </div>
+      <div id="sla-content">
+        <div class="sla-no-policy">Loading SLA data...</div>
       </div>
     </div>
 

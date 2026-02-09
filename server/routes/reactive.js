@@ -44,6 +44,64 @@ const GRATITUDE_KEYWORDS = [
 // ─────────────────────────────────────────────
 
 /**
+ * Strip common AI writing patterns to make text sound human.
+ * Runs as a final pass on all draft output.
+ */
+function humanizeText(text) {
+  if (!text) return text;
+
+  let result = text;
+
+  // Remove filler phrases entirely (order matters — longer patterns first)
+  const removePatterns = [
+    /I want to assure you that\s*/gi,
+    /I want to assure you\s*/gi,
+    /I understand your frustration\.?\s*/gi,
+    /I understand how frustrating this (?:can be|is|must be)\.?\s*/gi,
+    /Please don't hesitate to reach out\.?\s*/gi,
+    /Please don't hesitate to contact us\.?\s*/gi,
+    /Please do not hesitate to\s*/gi,
+    /Please don't hesitate to\s*/gi,
+    /don't hesitate to reach out\.?\s*/gi,
+    /do not hesitate to\s*/gi,
+    /don't hesitate to\s*/gi,
+    /Rest assured,?\s*/gi,
+    /Certainly!\s*/gi,
+    /Absolutely!\s*/gi,
+    /I'd be happy to help you with that\.?\s*/gi,
+    /I'd be happy to help\.?\s*/gi,
+    /I'd be happy to assist you\.?\s*/gi,
+  ];
+  for (const pattern of removePatterns) {
+    result = result.replace(pattern, '');
+  }
+
+  // Replace formal phrases with casual alternatives
+  result = result.replace(/I sincerely apologize/gi, "I'm really sorry");
+  result = result.replace(/I apologize for the inconvenience/gi, "sorry about that");
+  result = result.replace(/I apologize for any inconvenience/gi, "sorry about that");
+  result = result.replace(/Furthermore,?\s*/gi, 'Also, ');
+  result = result.replace(/Additionally,?\s*/gi, 'Also, ');
+  result = result.replace(/I have gone ahead and\s*/gi, "I've ");
+  result = result.replace(/I've gone ahead and\s*/gi, "I've ");
+  result = result.replace(/In the meantime,?\s*/gi, 'For now, ');
+  result = result.replace(/I'd be happy to\s*/gi, 'I can ');
+  result = result.replace(/I can confirm that\s*/gi, '');
+
+  // Em dashes → comma or dash
+  result = result.replace(/\s*—\s*/g, ' - ');
+
+  // Clean up double spaces or leading spaces on lines
+  result = result.replace(/  +/g, ' ');
+  result = result.replace(/^ +/gm, '');
+
+  // Fix sentences that start lowercase after removal (capitalize after ". ")
+  result = result.replace(/\. ([a-z])/g, (_, c) => '. ' + c.toUpperCase());
+
+  return result;
+}
+
+/**
  * Classify issue category from ticket subject + description
  */
 function classifyIssue(text) {
@@ -125,9 +183,9 @@ const ISSUE_TEMPLATES = {
     buildSection(customerMessages) {
       return `**Regarding your eSIM activation:**
 
-I can see you've been having trouble getting your eSIM set up${customerMessages.length > 1 ? ` (you've reached out about this ${customerMessages.length} times — I sincerely apologize for the frustration)` : ''}. I've looked into your account and here's exactly what's going on:
+I can see you've been having trouble getting your eSIM set up${customerMessages.length > 1 ? ` (you've reached out about this ${customerMessages.length} times, and I'm really sorry about that)` : ''}. I've looked into your account and here's exactly what's going on:
 
-Our system shows your eSIM profile status is currently pending. I've gone ahead and triggered a fresh eSIM profile for your account. You should receive a new QR code at this email address within the next 15 minutes.
+Our system shows your eSIM profile status is currently pending. I've triggered a fresh eSIM profile for your account. You should receive a new QR code at this email address within the next 15 minutes.
 
 Once you receive it, here's how to install it (takes about 2 minutes):
 1. Open **Settings** on your phone
@@ -135,9 +193,9 @@ Once you receive it, here's how to install it (takes about 2 minutes):
 3. Tap **"Add eSIM"** or **"Add Cellular Plan"**
 4. Scan the new QR code from the email
 
-**Important:** If you previously tried scanning an old QR code, that one is now deactivated — please only use the new one.
+**Important:** If you previously tried scanning an old QR code, that one is now deactivated. Please only use the new one.
 
-If the new QR code doesn't work or you don't receive it within 15 minutes, reply here immediately and I'll escalate this to our technical team for a priority fix.`;
+If the new QR code doesn't work or you don't receive it within 15 minutes, reply here right away and I'll escalate this to our technical team.`;
     }
   },
   payment: {
@@ -150,14 +208,14 @@ If the new QR code doesn't work or you don't receive it within 15 minutes, reply
       if (mentionsDuplicate) {
         return `**Regarding your payment concern:**
 
-I've reviewed your billing history and I can confirm there is a duplicate charge on your account. I sincerely apologize for this — it should not have happened.
+I've reviewed your billing history and I can confirm there is a duplicate charge on your account. Sorry about that, it shouldn't have happened.
 
 Here's what I've done:
 1. I've flagged the duplicate charge and initiated a refund to your original payment method
 2. The refund should appear on your statement within **3-5 business days** (depending on your bank)
-3. Your service will remain fully active — this billing issue does not affect your plan
+3. Your service will remain fully active. This billing issue does not affect your plan
 
-You don't need to do anything on your end. I'll follow up with you in 3 days to confirm the refund has posted. If you don't see it by then, please reply here and I'll escalate to our billing team directly.`;
+You don't need to do anything on your end. I'll follow up with you in 3 days to confirm the refund has posted. If you don't see it by then, just reply here and I'll escalate to our billing team directly.`;
       }
 
       if (mentionsFailed) {
@@ -166,9 +224,9 @@ You don't need to do anything on your end. I'll follow up with you in 3 days to 
 I've looked into your account and can see the payment attempt was not successful. This can sometimes happen due to bank security checks or card verification requirements.
 
 Here's what I'd recommend:
-1. **Check with your bank** — sometimes "Meow Mobile" or "Gather Inc." gets flagged for new transactions. Ask them to allow it.
-2. **Verify your card details** — in the Meow Mobile app, go to **Settings > Payment Method** and confirm your card number, expiration, and billing ZIP are correct.
-3. **Try again** — once the above are confirmed, retry the payment in the app.
+1. **Check with your bank** - sometimes "Meow Mobile" or "Gather Inc." gets flagged for new transactions. Ask them to allow it.
+2. **Verify your card details** - in the Meow Mobile app, go to **Settings > Payment Method** and confirm your card number, expiration, and billing ZIP are correct.
+3. **Try again** - once the above are confirmed, retry the payment in the app.
 
 If it still doesn't go through after trying these steps, reply here with the last 4 digits of the card you're using and I'll investigate further on our end.`;
       }
@@ -177,9 +235,9 @@ If it still doesn't go through after trying these steps, reply here with the las
 
 I've reviewed your payment and billing history. Here's what I found and what I'm doing about it:
 
-I've flagged this for our billing team to review. You should expect a resolution within 24-48 hours. In the meantime, your service remains active and unaffected.
+I've flagged this for our billing team to review. You should expect a resolution within 24-48 hours. For now, your service remains active and unaffected.
 
-${mentionsRefund ? 'I\'ve also submitted your refund request — you\'ll receive a confirmation email once it\'s processed (typically 3-5 business days).' : ''}
+${mentionsRefund ? 'I\'ve also submitted your refund request. You\'ll receive a confirmation email once it\'s processed (typically 3-5 business days).' : ''}
 
 If you have any additional billing questions, just reply here.`;
     }
@@ -206,18 +264,18 @@ Here's what to do:
 3. Confirm the **exact name** on the account
 4. Reply to this email with the verified details
 
-Once I have the correct information, I'll resubmit the transfer immediately — it typically completes within **24-48 hours** after that.`;
+Once I have the correct information, I'll resubmit the transfer right away. It typically completes within **24-48 hours** after that.`;
       }
 
       return `**Regarding your number transfer:**
 
-I've checked the status of your port-in request. ${mentionsStuck ? 'I understand this has been taking longer than expected and I apologize for the delay.' : 'Here\'s the current status:'}
+I've checked the status of your port-in request. ${mentionsStuck ? 'I know this has been taking longer than expected, sorry about the delay.' : 'Here\'s the current status:'}
 
 Port-in requests typically take 1-3 business days to complete. I've flagged yours for priority processing with our carrier team. You'll receive a confirmation email the moment the transfer is complete.
 
-In the meantime, your Meow Mobile service is active with a temporary number. Once the port completes, your original number will automatically replace it — no action needed from you.
+For now, your Meow Mobile service is active with a temporary number. Once the port completes, your original number will automatically replace it. No action needed from you.
 
-I'll personally follow up within 24 hours with an update. If you need anything sooner, just reply here.`;
+I'll follow up within 24 hours with an update. If you need anything sooner, just reply here.`;
     }
   },
   network: {
@@ -227,14 +285,14 @@ I'll personally follow up within 24 hours with an update. If you need anything s
 
       return `**Regarding your connectivity issue:**
 
-${mentionsNoService ? 'I understand you\'re currently without service — I know how frustrating that is, especially when you need your phone.' : 'I\'ve looked into the connectivity issues you reported.'}
+${mentionsNoService ? 'I can see you\'re currently without service, and I know that\'s really inconvenient.' : 'I\'ve looked into the connectivity issues you reported.'}
 
 I've checked our network status for your area and here's what I've found:
 
 First, please try these quick steps (they resolve most connectivity issues):
-1. **Toggle Airplane Mode** — turn it on, wait 10 seconds, turn it off
+1. **Toggle Airplane Mode** - turn it on, wait 10 seconds, turn it off
 2. **Restart your device** completely (power off and back on)
-3. **Check your eSIM** — go to Settings > Cellular and make sure your Meow Mobile line is enabled and set as the primary line for data
+3. **Check your eSIM** - go to Settings > Cellular and make sure your Meow Mobile line is enabled and set as the primary line for data
 
 If you're still having issues after trying these steps:
 - Try connecting to **WiFi** and enable **WiFi Calling** (Settings > Phone > WiFi Calling) for calls and texts
@@ -262,7 +320,7 @@ If that doesn't work, reply here and I'll help you regain access right away.`;
 
 I've pulled up your billing history and plan details. Here's what I see:
 
-I've forwarded your inquiry to our billing team for a detailed review. You'll receive a clear breakdown within 24 hours. In the meantime, your service is active and unaffected.
+I've forwarded your inquiry to our billing team for a detailed review. You'll receive a clear breakdown within 24 hours. For now, your service is active and unaffected.
 
 If you have any specific charges you'd like me to look into right away, just reply with the details.`;
     }
@@ -272,7 +330,7 @@ If you have any specific charges you'd like me to look into right away, just rep
     buildSection(customerMessages) {
       return `**Regarding Airvet:**
 
-Great news — Airvet is included free with your Meow Mobile plan! Here's what you need to know:
+Great news - Airvet is included free with your Meow Mobile plan! Here's what you need to know:
 
 - **Download the Airvet app** from the App Store or Google Play
 - **Sign up** using the same email address associated with your Meow Mobile account
@@ -286,7 +344,7 @@ If you're having trouble activating or connecting, reply here and I'll get our A
     buildSection(customerMessages) {
       return `**Regarding your inquiry:**
 
-Thank you for bringing this to our attention. I've reviewed your message and I'm looking into this now. I'll have a detailed response for you within the next few hours.
+Thanks for reaching out. I've reviewed your message and I'm looking into this now. I'll have a detailed response for you within the next few hours.
 
 If there's anything specific you'd like me to prioritize, just reply here.`;
     }
@@ -355,19 +413,19 @@ function buildDraftResponse(customerName, issueThreads, allTickets, ticketCommen
     nextStepsSummary = `\n**Quick summary of what happens next:**\n${sortedIssues.map((issue, i) => {
       const label = (ISSUE_TEMPLATES[issue] || ISSUE_TEMPLATES.general).label;
       const dupCount = issueGroups[issue].tickets.length;
-      const dupNote = dupCount > 1 ? ` (you reported this ${dupCount} times — all consolidated here)` : '';
-      return `${i + 1}. **${label}${dupNote}** — see details above`;
+      const dupNote = dupCount > 1 ? ` (you reported this ${dupCount} times, all consolidated here)` : '';
+      return `${i + 1}. **${label}${dupNote}** - see details above`;
     }).join('\n')}\n`;
   }
 
   // Apology note if customer contacted multiple times
   const apologyNote = ticketCount > 2
-    ? `\n\nI can see you've reached out ${ticketCount} times — I sincerely apologize that it took multiple contacts to get this handled. I've consolidated everything so you have one point of contact from here on out.\n`
+    ? `\n\nI can see you've reached out ${ticketCount} times, and I'm really sorry it took multiple contacts to get this handled. I've consolidated everything so you have one point of contact from here on out.\n`
     : ticketCount === 2
-    ? `\n\nI noticed you reached out a couple of times — I've consolidated your requests so I can handle everything in one place for you.\n`
+    ? `\n\nI noticed you reached out a couple of times. I've consolidated your requests so I can handle everything in one place for you.\n`
     : '';
 
-  const draft = `## DRAFT CUSTOMER RESPONSE — READY TO REVIEW & SEND
+  const draft = `## DRAFT CUSTOMER RESPONSE - READY TO REVIEW & SEND
 
 ---
 
@@ -380,7 +438,7 @@ Thank you for contacting Meow Mobile Support. I've reviewed ${issueCount > 1 ? '
 ${sections.join('\n\n---\n\n')}
 
 ${nextStepsSummary}
-I'm personally handling your case — you won't need to explain anything again. If anything doesn't look right or you have questions, just reply to this email and I'll take care of it.
+I'm handling your case personally, so you won't need to explain anything again. If anything doesn't look right or you have questions, just reply to this email and I'll take care of it.
 
 Best,
 [AGENT NAME]
@@ -394,7 +452,7 @@ Meow Mobile Support
 3. If you have access to account data (eSIM status, payment records, etc.), update the relevant sections with specifics.
 4. Once reviewed, copy everything between the --- lines and send as a **public reply**.`;
 
-  return draft;
+  return humanizeText(draft);
 }
 
 // ─────────────────────────────────────────────

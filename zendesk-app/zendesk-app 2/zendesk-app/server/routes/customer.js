@@ -426,7 +426,7 @@ function buildEmailDraft(problemType, stepType, stepText, customerName) {
     'payment:customer_action': `${greeting}It looks like your recent payment didn't go through. Here are a few things to try:\n\n1. Double-check your card details are up to date\n2. Try a different payment method\n3. Make sure your bank isn't blocking the transaction\n\nYou can retry your payment in the Meow Mobile app or on our website.${signoff}`,
     'portin:ask_info': `${greeting}To complete your number transfer, we need to verify a few details. Could you please confirm:\n\n- Your account number with your previous carrier\n- Your account PIN or password\n- The billing name on your previous account\n\nYou can usually find these in your old carrier's app or by calling them.${signoff}`,
     'portin:customer_action': `${greeting}Your number transfer needs a small update. Please contact your previous carrier and:\n\n1. Confirm your account number and PIN are correct\n2. Make sure your account is active (not suspended)\n3. Remove any port-out blocks on your line\n\nOnce that's done, let us know and we'll retry the transfer right away.${signoff}`,
-    'mochi_escalation:customer_action': `${greeting}Thank you for your patience — I've reviewed your conversation with our chatbot and I'm here to personally help resolve this.\n\nI'm looking into your issue now and will follow up shortly with next steps.${signoff}`,
+    'mochi_escalation:customer_action': `${greeting}Thanks for your patience. I've reviewed your conversation with our chatbot and I'm here to personally help resolve this.\n\nI'm looking into your issue now and will follow up shortly with next steps.${signoff}`,
   };
 
   const key = `${problemType}:${stepType}`;
@@ -820,7 +820,7 @@ Analyze the ticket and customer data provided, then respond with EXACTLY this JS
     "timing": "Specific timeframe (e.g. '24 hours', '48 hours', '2 hours')",
     "reason": "What to check on follow-up if customer hasn't confirmed resolution"
   },
-  "suggestedResponse": "Full draft reply to send to the customer. Use a friendly, helpful tone. Address them by first name. Include specific, actionable instructions relevant to their issue."
+  "suggestedResponse": "Full draft reply to send to the customer. Write like a real human support agent, NOT like an AI. Specifically: NEVER use em dashes (—), use commas or periods instead. NEVER use semicolons, break into two sentences. Avoid formal phrases like 'I sincerely apologize', 'please don't hesitate', 'rest assured', 'I want to assure you'. Use casual alternatives like 'sorry about that', 'just reply here', etc. Use contractions (I'm, you'll, don't, can't, won't, we've). Keep sentences short. Vary length naturally. Don't start multiple sentences with 'I'. Sound like a helpful coworker, not a corporate bot. No exclamation marks after apologies or acknowledgments. Address them by first name. Include specific, actionable instructions."
 }
 
 The "actions" array should contain ConnectX actions the agent can execute with one click. Only include actions that are RELEVANT to this specific ticket. Each action object must have:
