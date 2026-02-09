@@ -17,6 +17,7 @@ var analysisResult = null;
 var actionsPerformed = [];
 var pendingActions = [];
 var generatedResponseText = '';
+var slaTimerInterval = null;
 
 // Initialize app when Zendesk is ready
 document.addEventListener('DOMContentLoaded', async function() {
@@ -25,6 +26,9 @@ document.addEventListener('DOMContentLoaded', async function() {
 
   // Load ticket data
   await loadTicketData();
+
+  // Load SLA data
+  loadSlaData();
 });
 
 /**
@@ -544,4 +548,306 @@ function showNotification(message, type) {
   setTimeout(function() {
     notification.remove();
   }, 2500);
+}
+
+// ─── SLA Timer ────────────────────────────────────────────────
+
+/**
+ * Toggle SLA section collapse
+ */
+function toggleSla() {
+  document.getElementById('sla-section').classList.toggle('collapsed');
+}
+
+/**
+ * Fetch SLA / ticket metrics and render the timer
+ */
+async function loadSlaData() {
+  var ticketId = currentTicket.ticketId;
+  if (!ticketId) return;
+
+  try {
+    var res = await client.request({
+      url: '/api/v2/tickets/' + ticketId + '/metrics.json',
+      type: 'GET',
+      dataType: 'json'
+    });
+
+    var m = res.ticket_metric;
+    if (!m) {
+      renderNoSla();
+      return;
+    }
+
+    var metrics = buildSlaMetrics(m);
+
+    if (metrics.length === 0) {
+      renderNoSla();
+      return;
+    }
+
+    renderSlaMetrics(metrics);
+    startSlaCountdown(metrics);
+  } catch (err) {
+    console.error('SLA fetch error:', err);
+    renderNoSla();
+  }
+}
+
+/**
+ * Build an array of SLA metric objects from the ticket_metric response
+ */
+function buildSlaMetrics(m) {
+  var metrics = [];
+
+  // First Reply Time
+  var reply = m.reply_time_in_minutes;
+  if (reply) {
+    var replyMetric = parseSlaMetric(reply, 'First Response');
+    if (replyMetric) metrics.push(replyMetric);
+  }
+
+  // Full Resolution Time
+  var resolution = m.full_resolution_time_in_minutes;
+  if (resolution) {
+    var resMetric = parseSlaMetric(resolution, 'Resolution');
+    if (resMetric) metrics.push(resMetric);
+  }
+
+  return metrics;
+}
+
+/**
+ * Parse a single SLA metric block (calendar or business) into a renderable object.
+ * Uses business hours if available, falls back to calendar.
+ */
+function parseSlaMetric(metricBlock, label) {
+  // Prefer business, fall back to calendar
+  var src = metricBlock.business || metricBlock.calendar;
+  if (!src) return null;
+
+  // If there's no breach_at timestamp and no elapsed time, SLA not active
+  if (!src.breach_at && (src.elapsed === undefined || src.elapsed === null) && (src.calendar === undefined)) {
+    return null;
+  }
+
+  var now = Date.now();
+  var breachAt = src.breach_at ? new Date(src.breach_at).getTime() : null;
+
+  // Already fulfilled (e.g. already replied)
+  if (src.elapsed !== undefined && src.elapsed !== null && !breachAt) {
+    return {
+      label: label,
+      status: 'met',
+      percentage: 100,
+      timeText: 'Met',
+      remainingMs: 0
+    };
+  }
+
+  if (!breachAt) return null;
+
+  // Calculate based on created_at of the metric for the target window
+  var remainingMs = breachAt - now;
+  var breached = remainingMs <= 0;
+
+  // We need to estimate total target to compute percentage.
+  // Target = elapsed minutes so far (converted to ms) + remaining
+  var elapsedMs = (src.elapsed || 0) * 60 * 1000;
+  var totalMs = elapsedMs + Math.max(remainingMs, 0);
+
+  // Guard against division by zero
+  var percentage = totalMs > 0 ? Math.min((elapsedMs / totalMs) * 100, 100) : 100;
+
+  if (breached) {
+    percentage = 100;
+  }
+
+  var status;
+  if (breached) {
+    status = 'breached';
+  } else if (percentage > 85) {
+    status = 'red';
+  } else if (percentage > 60) {
+    status = 'amber';
+  } else {
+    status = 'green';
+  }
+
+  return {
+    label: label,
+    status: status,
+    percentage: percentage,
+    timeText: breached ? 'BREACHED ' + formatDuration(Math.abs(remainingMs)) + ' ago' : formatDuration(remainingMs) + ' left',
+    remainingMs: remainingMs,
+    breachAt: breachAt,
+    elapsedMs: elapsedMs,
+    totalMs: totalMs
+  };
+}
+
+/**
+ * Format a millisecond duration as human-readable countdown
+ */
+function formatDuration(ms) {
+  var totalSec = Math.floor(ms / 1000);
+  var days = Math.floor(totalSec / 86400);
+  var hours = Math.floor((totalSec % 86400) / 3600);
+  var mins = Math.floor((totalSec % 3600) / 60);
+  var secs = totalSec % 60;
+
+  if (days > 0) {
+    return days + 'd ' + hours + 'h ' + mins + 'm';
+  }
+  if (hours > 0) {
+    return hours + 'h ' + mins + 'm ' + secs + 's';
+  }
+  return mins + 'm ' + secs + 's';
+}
+
+/**
+ * Render the SLA metric bars into the DOM
+ */
+function renderSlaMetrics(metrics) {
+  var container = document.getElementById('sla-metrics-container');
+  var html = '';
+
+  metrics.forEach(function(m) {
+    html +=
+      '<div class="sla-metric sla-status-' + m.status + '" data-label="' + m.label + '">' +
+        '<div class="sla-metric-header">' +
+          '<span class="sla-metric-label">' + m.label + '</span>' +
+          '<span class="sla-metric-time">' + m.timeText + '</span>' +
+        '</div>' +
+        '<div class="sla-bar-bg">' +
+          '<div class="sla-bar-fill" style="width: ' + m.percentage + '%"></div>' +
+        '</div>' +
+      '</div>';
+  });
+
+  container.innerHTML = html;
+  updateOverallBadge(metrics);
+}
+
+/**
+ * Update the badge next to "SLA Status" and the urgent timer in the collapsed header
+ */
+function updateOverallBadge(metrics) {
+  var badge = document.getElementById('sla-overall-badge');
+  var urgentTimer = document.getElementById('sla-urgent-timer');
+
+  // Determine worst status across all metrics
+  var priority = { met: 0, green: 1, amber: 2, red: 3, breached: 4 };
+  var worst = metrics.reduce(function(w, m) {
+    return priority[m.status] > priority[w.status] ? m : w;
+  }, metrics[0]);
+
+  if (worst.status === 'breached') {
+    badge.textContent = 'BREACHED';
+    badge.className = 'sla-overall-badge sla-badge-red';
+  } else if (worst.status === 'red' || worst.status === 'amber') {
+    badge.textContent = 'AT RISK';
+    badge.className = 'sla-overall-badge sla-badge-amber';
+  } else if (worst.status === 'met') {
+    badge.textContent = 'MET';
+    badge.className = 'sla-overall-badge sla-badge-green';
+  } else {
+    badge.textContent = 'ON TRACK';
+    badge.className = 'sla-overall-badge sla-badge-green';
+  }
+
+  // Show the most urgent countdown in the collapsed header
+  var activeMetrics = metrics.filter(function(m) { return m.remainingMs !== 0; });
+  if (activeMetrics.length > 0) {
+    var mostUrgent = activeMetrics.reduce(function(a, b) {
+      return a.remainingMs < b.remainingMs ? a : b;
+    });
+    urgentTimer.textContent = mostUrgent.timeText;
+    urgentTimer.style.color = worst.status === 'breached' || worst.status === 'red' ? '#cc3340'
+      : worst.status === 'amber' ? '#c96400' : '#038153';
+  } else {
+    urgentTimer.textContent = '';
+  }
+}
+
+/**
+ * Start a 1-second interval to update the countdown timers live
+ */
+function startSlaCountdown(metrics) {
+  if (slaTimerInterval) clearInterval(slaTimerInterval);
+
+  // Only tick if there are active (non-met) metrics
+  var hasActive = metrics.some(function(m) { return m.breachAt; });
+  if (!hasActive) return;
+
+  slaTimerInterval = setInterval(function() {
+    var now = Date.now();
+    var updated = [];
+
+    metrics.forEach(function(m) {
+      if (!m.breachAt) {
+        updated.push(m);
+        return;
+      }
+
+      var remainingMs = m.breachAt - now;
+      var breached = remainingMs <= 0;
+      var elapsedMs = m.totalMs - Math.max(remainingMs, 0);
+      var percentage = m.totalMs > 0 ? Math.min((elapsedMs / m.totalMs) * 100, 100) : 100;
+
+      if (breached) percentage = 100;
+
+      var status;
+      if (breached) {
+        status = 'breached';
+      } else if (percentage > 85) {
+        status = 'red';
+      } else if (percentage > 60) {
+        status = 'amber';
+      } else {
+        status = 'green';
+      }
+
+      var timeText = breached
+        ? 'BREACHED ' + formatDuration(Math.abs(remainingMs)) + ' ago'
+        : formatDuration(remainingMs) + ' left';
+
+      updated.push({
+        label: m.label,
+        status: status,
+        percentage: percentage,
+        timeText: timeText,
+        remainingMs: remainingMs,
+        breachAt: m.breachAt,
+        elapsedMs: elapsedMs,
+        totalMs: m.totalMs
+      });
+    });
+
+    // Update DOM in place
+    updated.forEach(function(m) {
+      var el = document.querySelector('.sla-metric[data-label="' + m.label + '"]');
+      if (!el) return;
+
+      el.className = 'sla-metric sla-status-' + m.status;
+      el.querySelector('.sla-metric-time').textContent = m.timeText;
+      el.querySelector('.sla-bar-fill').style.width = m.percentage + '%';
+    });
+
+    updateOverallBadge(updated);
+
+    // Replace metrics array reference for next tick
+    metrics.splice(0, metrics.length);
+    updated.forEach(function(m) { metrics.push(m); });
+  }, 1000);
+}
+
+/**
+ * Show "No SLA policy" fallback
+ */
+function renderNoSla() {
+  var container = document.getElementById('sla-metrics-container');
+  container.innerHTML = '<div class="sla-no-policy">No SLA policy applied to this ticket</div>';
+  document.getElementById('sla-overall-badge').textContent = '';
+  document.getElementById('sla-urgent-timer').textContent = '';
 }

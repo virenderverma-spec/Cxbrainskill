@@ -311,6 +311,141 @@
       margin-bottom: 4px;
     }
 
+    /* SLA Timer Section */
+    .sla-section {
+      background: #fff;
+      border-bottom: 1px solid #d8dcde;
+    }
+
+    .sla-toggle {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 16px;
+      cursor: pointer;
+      user-select: none;
+      background: none;
+      border: none;
+      width: 100%;
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 600;
+      color: #2f3941;
+    }
+
+    .sla-toggle:hover {
+      background: #f8f9f9;
+    }
+
+    .sla-toggle-left {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .sla-toggle .arrow {
+      font-size: 10px;
+      transition: transform 0.2s;
+    }
+
+    .sla-section.collapsed .sla-body {
+      display: none;
+    }
+
+    .sla-section.collapsed .arrow {
+      transform: rotate(-90deg);
+    }
+
+    .sla-body {
+      padding: 0 16px 12px 16px;
+    }
+
+    .sla-metric {
+      margin-bottom: 10px;
+    }
+
+    .sla-metric:last-child {
+      margin-bottom: 0;
+    }
+
+    .sla-metric-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 4px;
+    }
+
+    .sla-metric-label {
+      font-size: 11px;
+      font-weight: 500;
+      color: #68737d;
+    }
+
+    .sla-metric-time {
+      font-size: 11px;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .sla-bar-bg {
+      height: 6px;
+      background: #e9ebed;
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .sla-bar-fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 1s linear;
+      min-width: 2px;
+    }
+
+    .sla-status-green .sla-bar-fill { background: #038153; }
+    .sla-status-green .sla-metric-time { color: #038153; }
+
+    .sla-status-amber .sla-bar-fill { background: #c96400; }
+    .sla-status-amber .sla-metric-time { color: #c96400; }
+
+    .sla-status-red .sla-bar-fill { background: #cc3340; }
+    .sla-status-red .sla-metric-time { color: #cc3340; }
+
+    .sla-status-breached .sla-bar-fill { background: #cc3340; }
+    .sla-status-breached .sla-metric-time { color: #cc3340; }
+    .sla-status-breached .sla-metric-label { color: #cc3340; font-weight: 600; }
+
+    .sla-status-met .sla-bar-fill { background: #038153; }
+    .sla-status-met .sla-metric-time { color: #038153; }
+
+    .sla-no-policy {
+      padding: 8px 0;
+      font-size: 11px;
+      color: #87929d;
+      text-align: center;
+    }
+
+    .sla-overall-badge {
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 8px;
+      font-weight: 600;
+    }
+
+    .sla-badge-green {
+      background: #edf8f4;
+      color: #038153;
+    }
+
+    .sla-badge-amber {
+      background: #fff5e6;
+      color: #c96400;
+    }
+
+    .sla-badge-red {
+      background: #fff0f1;
+      color: #cc3340;
+    }
+
     /* Notification */
     .notification {
       position: fixed;
@@ -339,6 +474,23 @@
     <!-- Header -->
     <div class="header">
       <h1>🐱 CS Copilot</h1>
+    </div>
+
+    <!-- SLA Timer -->
+    <div class="sla-section" id="sla-section">
+      <button class="sla-toggle" onclick="toggleSla()">
+        <span class="sla-toggle-left">
+          <span class="arrow">▼</span>
+          <span>SLA Status</span>
+          <span class="sla-overall-badge" id="sla-overall-badge"></span>
+        </span>
+        <span class="sla-metric-time" id="sla-urgent-timer"></span>
+      </button>
+      <div class="sla-body" id="sla-body">
+        <div id="sla-metrics-container">
+          <div class="sla-no-policy">Loading SLA data...</div>
+        </div>
+      </div>
     </div>
 
     <!-- Main Actions - Only 2 Buttons -->
