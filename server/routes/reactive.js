@@ -117,6 +117,136 @@ Before responding to this customer, complete the following:
 4. Informational (how-to, status updates)`;
 }
 
+// Issue-specific draft response snippets
+const ISSUE_RESPONSE_SNIPPETS = {
+  esim: {
+    label: 'eSIM activation',
+    draft: `I've looked into your eSIM activation and here's what I found: [AGENT: check eSIM status and describe the issue].
+
+To get this resolved:
+1. [AGENT: specific resolution step — e.g., "I've triggered a new eSIM profile for you"]
+2. You'll receive a new QR code at this email within [AGENT: timeframe]
+3. Once you get it, go to Settings > Cellular > Add eSIM and scan the code
+
+[AGENT: if SIM swap needed, note that here]`
+  },
+  payment: {
+    label: 'payment/billing concern',
+    draft: `I've reviewed your payment history and I can see [AGENT: describe what you found — e.g., "a duplicate charge of $X on DATE"].
+
+Here's what I'm doing about it:
+1. [AGENT: specific action — e.g., "I've initiated a refund of $X to your card ending in XXXX"]
+2. [AGENT: expected timeline — e.g., "You should see the refund within 3-5 business days"]
+
+[AGENT: if payment failed, provide retry instructions]`
+  },
+  portin: {
+    label: 'number transfer (port-in)',
+    draft: `I've checked the status of your number transfer and here's the latest: [AGENT: describe current port-in status].
+
+[AGENT: if rejected] The transfer was flagged by your previous carrier. To fix this:
+1. Contact [AGENT: old carrier name] and verify your account number and transfer PIN
+2. Ask them to remove any port-out restrictions
+3. Reply to this email with the confirmed details and I'll reattempt the transfer
+
+[AGENT: if in progress] Your transfer is currently being processed and should complete within [AGENT: timeframe].`
+  },
+  network: {
+    label: 'network/connectivity issue',
+    draft: `I understand you're experiencing connectivity issues. Here's what I've found: [AGENT: describe network status, any outages].
+
+In the meantime, please try:
+1. Toggle Airplane Mode on and off
+2. Restart your device
+3. If available, connect to WiFi for WiFi Calling
+
+[AGENT: if outage] We're aware of a service disruption in your area and our team is working to restore coverage. Estimated resolution: [AGENT: timeframe].`
+  },
+  account: {
+    label: 'account issue',
+    draft: `Regarding your account: [AGENT: describe what you found and the resolution].
+
+[AGENT: provide specific steps the customer needs to take, if any]`
+  },
+  billing: {
+    label: 'billing inquiry',
+    draft: `I've looked into your billing question: [AGENT: describe findings].
+
+[AGENT: provide specific answer or resolution steps]`
+  },
+  airvet: {
+    label: 'Airvet/pet care',
+    draft: `Regarding your Airvet concern: [AGENT: describe what you found].
+
+[AGENT: provide resolution or next steps]`
+  },
+  general: {
+    label: 'inquiry',
+    draft: `[AGENT: describe the issue and your resolution/response]`
+  }
+};
+
+/**
+ * Build a draft customer response covering all issues
+ */
+function buildDraftResponse(customerName, issueThreads, allTickets) {
+  // Get unique issues in priority order
+  const priorityOrder = ['network', 'esim', 'payment', 'billing', 'portin', 'account', 'airvet', 'general'];
+  const uniqueIssues = [...new Set(Object.values(issueThreads))];
+  uniqueIssues.sort((a, b) => priorityOrder.indexOf(a) - priorityOrder.indexOf(b));
+
+  // Build per-issue sections
+  const issueSections = uniqueIssues.map(issue => {
+    const snippet = ISSUE_RESPONSE_SNIPPETS[issue] || ISSUE_RESPONSE_SNIPPETS.general;
+    // Find the ticket(s) for this issue to include context
+    const relatedTickets = Object.entries(issueThreads)
+      .filter(([, cat]) => cat === issue)
+      .map(([id]) => allTickets.find(t => String(t.id) === String(id)))
+      .filter(Boolean);
+
+    const subjects = relatedTickets.map(t => t.subject).join(', ');
+
+    return `**Regarding your ${snippet.label}:**
+_(from: "${subjects}")_
+
+${snippet.draft}`;
+  }).join('\n\n---\n\n');
+
+  // Build full draft
+  const name = customerName || 'there';
+
+  let nextSteps = '';
+  if (uniqueIssues.length > 1) {
+    nextSteps = `\n\nHere's a quick summary of next steps:\n${uniqueIssues.map((issue, i) => {
+      const snippet = ISSUE_RESPONSE_SNIPPETS[issue] || ISSUE_RESPONSE_SNIPPETS.general;
+      return `${i + 1}. ${snippet.label}: [AGENT: one-line summary of resolution/next step]`;
+    }).join('\n')}`;
+  }
+
+  return `## DRAFT CUSTOMER RESPONSE
+**Review, fill in [AGENT: ...] placeholders, then send as public reply.**
+
+---
+
+Subject: Update on your Meow Mobile support requests
+
+Hi ${name},
+
+Thank you for reaching out to us. I've reviewed all of your recent messages and I want to address everything in one place so you have a clear picture.
+
+${issueSections}
+${nextSteps}
+
+If anything doesn't look right or you have additional questions, just reply to this email — I'm personally handling your case and will make sure everything is resolved.
+
+Best,
+[AGENT: your name]
+Meow Mobile Support
+
+---
+**Instructions:** Copy the text between the lines above, fill in all [AGENT: ...] placeholders with actual details, then paste as a public reply on this ticket.`;
+}
+
 // ─────────────────────────────────────────────
 // ROUTE 1: Webhook — New Ticket Created
 // POST /api/reactive/ticket-created
@@ -322,6 +452,11 @@ Your response MUST address each issue in its own section. Use the consolidated r
 The outbound gate will verify that all issues are addressed before allowing send.`
     );
   }
+
+  // Generate draft customer response covering all issues
+  const customerName = targetTicket.requester?.name || targetTicket.requester_id || 'there';
+  const draftResponse = buildDraftResponse(customerName, issueThreads, allTickets);
+  await zendesk.addInternalNote(targetTicket.id, draftResponse);
 
   // Close source tickets (pending → solved to handle Zendesk status transition rules)
   for (const source of sourceTickets) {
