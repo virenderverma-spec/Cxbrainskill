@@ -9,6 +9,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const chatRouter = require('./routes/chat');
+const reactiveRouter = require('./routes/reactive');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -25,6 +26,7 @@ app.use((req, res, next) => {
 
 // Routes
 app.use('/api/chat', chatRouter);
+app.use('/api/reactive', reactiveRouter);
 
 // Health check
 app.get('/health', (req, res) => {

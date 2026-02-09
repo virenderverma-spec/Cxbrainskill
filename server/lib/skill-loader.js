@@ -189,7 +189,8 @@ function detectRelevantSkills(issueText) {
     'airvet-support': ['airvet', 'vet', 'pet', 'veterinary', 'animal'],
     'escalation-guide': ['escalate', 'manager', 'supervisor', 'complaint'],
     'email-handling': ['email', 'reply', 'response'],
-    'mochi-handoff': ['mochi', 'bot', 'chatbot', 'transferred']
+    'mochi-handoff': ['mochi', 'bot', 'chatbot', 'transferred'],
+    'reactive-communication': ['consolidate', 'merge tickets', 'multiple tickets', 'duplicate ticket', 'suppress auto-ack', 'same customer']
   };
 
   for (const [skill, keywords] of Object.entries(skillKeywords)) {

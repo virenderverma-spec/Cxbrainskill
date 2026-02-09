@@ -8,9 +8,9 @@
         "zd-mcp-server"
       ],
       "env": {
-        "ZENDESK_SUBDOMAIN": "rockstarautomations",
-        "ZENDESK_EMAIL": "virender.verma@rockstarautomations.com",
-        "ZENDESK_TOKEN": "c1FQnKDt1OMJ6kvskcQDe3F9QLlnpRHZsuaZv1wX"
+        "ZENDESK_SUBDOMAIN": "rockstarautomations1766495393",
+        "ZENDESK_EMAIL": "virender.verma@rockstar-automations.com",
+        "ZENDESK_TOKEN": "Oqj7GOYogT4xZJ1TU8YTtX5DPDJy44xSTRHCOdUe"
       }
     }
   }

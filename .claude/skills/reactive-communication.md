@@ -118,8 +118,22 @@ IF open_ticket_count = 0:
 IF open_ticket_count >= 1:
   → Multiple tickets detected. Initiate consolidation.
   → Wait for 2-minute grace period (see below)
-  → Then merge all into the LATEST (newest) ticket.
+  → Merge ALL tickets into the LATEST (newest) ticket.
+  → Classify each ticket's issue. Tag each issue on the consolidated ticket.
+  → Agent's draft response MUST address each issue in its own section.
 ```
+
+### Same-Issue vs. Different-Issue Handling
+
+All tickets are merged regardless of issue type. The key difference is in the **response**:
+
+| Scenario | Merge Action | Response Requirement |
+|----------|-------------|---------------------|
+| 2 tickets, same issue (eSIM) | Merge into newest | Single response about eSIM |
+| 2 tickets, different issues (eSIM + payment) | Merge into newest | Response has 2 sections: one for eSIM, one for payment |
+| 3 tickets, mixed (2x port-in + 1x billing) | Merge all into newest | Response has 2 sections: port-in and billing |
+
+The outbound gate (Section D) verifies that ALL issues are addressed before allowing send.
 
 ### 2-Minute Grace Period
 
@@ -138,7 +152,7 @@ AFTER 2 minutes:
 
 ### Merge Strategy
 
-All source tickets merge INTO the **latest (newest)** ticket. The latest ticket becomes the **consolidated target**.
+All source tickets merge INTO the **latest (newest)** ticket. The latest ticket becomes the **consolidated target**. Each ticket's issue is classified and tagged so the agent addresses every issue separately in their response.
 
 #### Step 1: Identify Target and Sources
 
@@ -846,9 +860,13 @@ Customer: lisa@example.com sends an email about a payment issue, starts a chat a
    - #401, #402 solved and tagged merged_source.
    - #403 tagged: consolidated_ticket, issue_thread_1_payment, issue_thread_2_esim, issue_thread_3_portin.
    - Priority: HIGH (Facebook = public visibility).
+   - Internal note: "3 distinct issues detected. Response must address each separately."
 6. Agent opens #403, sees banner with 3 issues across 3 channels.
-7. Agent drafts consolidated email (Template 1) addressing payment, eSIM, and port-in.
-8. Outbound gate: All 3 issues addressed? Yes. 15-min window clear? Yes. Send.
+7. Agent drafts email with 3 sections:
+   "Regarding your payment concern: ..."
+   "Regarding your eSIM activation: ..."
+   "Regarding your number transfer: ..."
+8. Outbound gate verifies all 3 issues addressed. 15-min window clear. Send.
 9. Consolidated email sent to lisa@example.com.
 10. Brief notification sent on chat: "I've sent you a detailed email covering everything!"
 11. Brief reply on Facebook: "Hi Lisa, I've sent a detailed response to your email!"
