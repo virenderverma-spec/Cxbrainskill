@@ -323,16 +323,25 @@ The outbound gate will verify that all issues are addressed before allowing send
     );
   }
 
-  // Close source tickets
+  // Close source tickets (pending → solved to handle Zendesk status transition rules)
   for (const source of sourceTickets) {
     const sourceTags = zendesk.getTicketTags(source);
+    // First set to pending with merge tags and internal note
     await zendesk.updateTicket(source.id, {
-      status: 'solved',
+      status: 'pending',
       tags: [...new Set([...sourceTags, 'merged_source', `merged_into_${targetTicket.id}`])],
       comment: {
         body: `This ticket has been merged into #${targetTicket.id} as part of customer ticket consolidation. All conversation history has been copied to the target ticket.`,
         public: false
       }
+    });
+    // Then solve with required custom fields (Inquiry Type + Customer Phone Number)
+    await zendesk.updateTicket(source.id, {
+      status: 'solved',
+      custom_fields: [
+        { id: 44720831858075, value: 'non_user____test_ticket' },
+        { id: 44720870291483, value: 'merged' }
+      ]
     });
   }
 
