@@ -1,0 +1,47 @@
+service: mcp-ai-boss-api
+
+frameworkVersion: '3'
+
+provider:
+  name: aws
+  runtime: nodejs20.x
+  region: us-east-1
+  timeout: 30
+  memorySize: 512
+  environment:
+    AI_BOSS_API_BASE_URL: ${env:AI_BOSS_API_BASE_URL, 'https://boss-api.rockstar-automations.com'}
+    AI_BOSS_API_KEY: ${env:AI_BOSS_API_KEY}
+    AMDOCS_API_KEY: ${env:AMDOCS_API_KEY}
+    OPENAPI_SPEC_PATH: /var/task/openapi.json
+  httpApi:
+    cors: true
+
+functions:
+  mcp:
+    handler: dist/lambda.handler
+    events:
+      - httpApi:
+          path: /{proxy+}
+          method: ANY
+      - httpApi:
+          path: /
+          method: ANY
+
+package:
+  patterns:
+    - '!node_modules/**'
+    - '!src/**'
+    - '!*.md'
+    - '!*.json'
+    - '!tsconfig.json'
+    - '!test*.js'
+    - '!test*.ts'
+    - 'dist/**'
+    - 'openapi.json'
+    - 'package.json'
+    - 'package-lock.json'
+
+# Note: TypeScript compilation should be done before deployment
+# Run: npm run build
+# The plugin is optional - we compile manually for better control
+

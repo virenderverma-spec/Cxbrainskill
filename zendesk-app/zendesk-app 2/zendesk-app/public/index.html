@@ -1,0 +1,1384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Zendesk Agent Workspace — Gather</title>
+<style>
+/* ============================================================
+   RESET & BASE
+   ============================================================ */
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html{height:100%;overflow:hidden;}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+  font-size:14px;line-height:1.5;color:#2F3941;background:#F8F9F9;
+  height:100%;overflow:hidden;
+}
+button{font-family:inherit;cursor:pointer;}
+input,textarea,select{font-family:inherit;font-size:13px;}
+
+/* ============================================================
+   LAYOUT
+   ============================================================ */
+.workspace{display:flex;flex-direction:column;height:100vh;}
+
+/* -- Top Bar ------------------------------------------------ */
+.topbar{
+  height:50px;min-height:50px;background:#fff;border-bottom:1px solid #ddd;
+  display:flex;align-items:center;padding:0 12px;gap:8px;z-index:10;
+}
+.topbar .logo{width:28px;height:28px;background:#03363D;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:14px;}
+.ticket-tab{
+  display:flex;align-items:center;gap:6px;background:#fff;border:1px solid #ddd;
+  border-radius:6px 6px 0 0;padding:6px 12px;font-size:13px;font-weight:500;
+  border-bottom:2px solid #fff;margin-bottom:-1px;max-width:260px;position:relative;
+}
+.ticket-tab .close-tab{font-size:11px;color:#999;cursor:pointer;margin-left:4px;}
+.ticket-tab .close-tab:hover{color:#333;}
+.topbar .add-tab{font-size:13px;color:#68737D;cursor:pointer;padding:4px 8px;border-radius:4px;}
+.topbar .add-tab:hover{background:#f0f0f0;}
+.topbar-spacer{flex:1;}
+.topbar-icons{display:flex;gap:4px;}
+.topbar-icons button{
+  width:36px;height:36px;border:none;background:none;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;font-size:18px;color:#68737D;
+}
+.topbar-icons button:hover{background:#F0F0F0;}
+
+/* -- Meta Bar (below top bar) ------------------------------- */
+.meta-bar{
+  height:36px;min-height:36px;background:#fff;border-bottom:1px solid #E9EBED;
+  display:flex;align-items:center;padding:0 16px;gap:12px;font-size:13px;color:#68737D;
+}
+.meta-bar .meta-tag{
+  padding:2px 10px;border-radius:3px;font-size:12px;font-weight:600;
+}
+.meta-tag.org{color:#68737D;}
+.meta-tag.user{color:#1F73B7;}
+.meta-tag.status{background:#D1E8DF;color:#038153;}
+.meta-tag.type{color:#2F3941;font-weight:500;}
+
+/* -- Main Content ------------------------------------------- */
+.main-content{
+  flex:1;display:grid;
+  grid-template-columns:280px 1fr 360px;
+  overflow:hidden;
+}
+
+/* ============================================================
+   LEFT PANEL — Ticket Properties
+   ============================================================ */
+.left-panel{
+  background:#fff;border-right:1px solid #E9EBED;overflow-y:auto;
+  padding:20px 16px;
+}
+.prop-group{margin-bottom:18px;}
+.prop-label{
+  font-size:12px;font-weight:600;color:#2F3941;margin-bottom:6px;
+  display:flex;align-items:center;gap:4px;
+}
+.prop-label .info-icon{
+  width:14px;height:14px;border-radius:50%;border:1px solid #bbb;
+  font-size:9px;display:inline-flex;align-items:center;justify-content:center;
+  color:#999;cursor:help;
+}
+.prop-label .take-it{font-size:12px;color:#1F73B7;margin-left:auto;cursor:pointer;}
+.prop-select{
+  width:100%;padding:7px 10px;border:1px solid #D8DCDE;border-radius:4px;
+  background:#fff;color:#2F3941;font-size:13px;appearance:auto;
+}
+.prop-input{
+  width:100%;padding:7px 10px;border:1px solid #D8DCDE;border-radius:4px;
+  background:#fff;color:#2F3941;font-size:13px;
+}
+.prop-value{font-size:13px;color:#2F3941;padding:4px 0;}
+.tags-container{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;}
+.tag{
+  background:#EDF7FF;color:#1F73B7;padding:3px 10px;border-radius:3px;
+  font-size:12px;font-weight:500;cursor:default;white-space:nowrap;
+}
+
+/* ============================================================
+   CENTER PANEL — Ticket Conversation
+   ============================================================ */
+.center-panel{
+  background:#fff;display:flex;flex-direction:column;overflow:hidden;
+  border-right:1px solid #E9EBED;
+}
+
+/* -- Ticket Header ------------------------------------------ */
+.ticket-header{padding:20px 24px 0 24px;}
+.ticket-subject{font-size:18px;font-weight:600;margin-bottom:8px;line-height:1.3;}
+.ticket-meta-row{
+  display:flex;align-items:center;gap:12px;font-size:13px;color:#68737D;
+  margin-bottom:8px;flex-wrap:wrap;
+}
+.ticket-meta-row .sep{color:#D8DCDE;}
+.ticket-meta-row .intent-tag{color:#1F73B7;cursor:pointer;}
+.ticket-meta-row .sentiment{display:flex;align-items:center;gap:4px;}
+.ticket-actions{
+  display:flex;gap:6px;padding:8px 0 12px 0;border-bottom:1px solid #E9EBED;
+}
+.ticket-actions button{
+  width:32px;height:32px;border:1px solid #D8DCDE;border-radius:4px;
+  background:#fff;font-size:14px;color:#68737D;display:flex;align-items:center;justify-content:center;
+}
+.ticket-actions button:hover{background:#F8F9F9;}
+.ticket-actions .spacer{flex:1;}
+
+/* -- AI Summary Link ---------------------------------------- */
+.ai-summary-link{
+  display:flex;align-items:center;gap:8px;padding:10px 16px;margin:12px 24px;
+  background:#F8F9F9;border:1px solid #E9EBED;border-radius:6px;
+  font-size:13px;color:#1F73B7;cursor:pointer;
+}
+.ai-summary-link:hover{background:#EDF7FF;}
+
+/* -- Conversation Thread ------------------------------------ */
+.conversation{flex:1;overflow-y:auto;padding:16px 24px;}
+.message{display:flex;gap:12px;margin-bottom:24px;}
+.msg-avatar{
+  width:36px;height:36px;min-width:36px;border-radius:50%;background:#E9EBED;
+  display:flex;align-items:center;justify-content:center;font-size:13px;
+  font-weight:600;color:#68737D;overflow:hidden;
+}
+.msg-avatar img{width:100%;height:100%;object-fit:cover;}
+.msg-body{flex:1;min-width:0;}
+.msg-header{display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap;}
+.msg-header .name{font-weight:600;font-size:13px;}
+.msg-header .direction{font-size:12px;color:#999;}
+.msg-header .time{font-size:12px;color:#999;}
+.msg-header .show-more{font-size:12px;color:#1F73B7;cursor:pointer;}
+.msg-text{font-size:14px;line-height:1.6;color:#2F3941;}
+.msg-text a{color:#1F73B7;}
+.msg-text .json-block{
+  background:#F3F4F6;border-radius:4px;padding:12px;font-family:"SF Mono",Monaco,Consolas,monospace;
+  font-size:12px;line-height:1.5;white-space:pre-wrap;word-break:break-all;margin-top:8px;
+}
+.internal-note{
+  background:#FFF8E1;border:1px solid #FFE082;border-radius:8px;padding:12px 16px;
+  margin-bottom:24px;
+}
+.internal-note .note-label{font-size:11px;font-weight:600;color:#AD5E18;text-transform:uppercase;margin-bottom:4px;}
+
+/* -- Reply Box ---------------------------------------------- */
+.reply-box{
+  border-top:1px solid #E9EBED;padding:12px 24px;background:#fff;
+}
+.reply-box textarea{
+  width:100%;min-height:60px;padding:10px 12px;border:1px solid #D8DCDE;
+  border-radius:6px;font-size:14px;resize:vertical;line-height:1.5;
+}
+.reply-box textarea:focus{outline:none;border-color:#1F73B7;box-shadow:0 0 0 3px rgba(31,115,183,.15);}
+.reply-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:8px;}
+.btn{
+  padding:8px 16px;border-radius:4px;font-size:13px;font-weight:600;border:none;
+}
+.btn-primary{background:#1F73B7;color:#fff;}
+.btn-primary:hover{background:#155A8A;}
+.btn-secondary{background:#fff;color:#2F3941;border:1px solid #D8DCDE;}
+.btn-secondary:hover{background:#F8F9F9;}
+
+/* ============================================================
+   RIGHT PANEL — Apps
+   ============================================================ */
+.right-panel{
+  background:#F8F9F9;overflow-y:auto;display:flex;flex-direction:column;
+}
+.right-panel-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:14px 16px 10px 16px;
+}
+.right-panel-header h2{font-size:15px;font-weight:600;color:#2F3941;}
+.right-panel-header .header-icons{display:flex;gap:2px;}
+.right-panel-header .header-icons button{
+  width:30px;height:30px;border:none;background:none;border-radius:4px;
+  font-size:16px;color:#68737D;display:flex;align-items:center;justify-content:center;
+}
+.right-panel-header .header-icons button:hover{background:#E9EBED;}
+.right-panel-nav{
+  display:flex;gap:4px;padding:0 12px;border-bottom:1px solid #E9EBED;
+}
+.right-panel-nav button{
+  width:32px;height:32px;border:none;background:none;border-radius:4px;
+  font-size:16px;color:#68737D;display:flex;align-items:center;justify-content:center;
+}
+.right-panel-nav button:hover{background:#E9EBED;}
+.right-panel-nav button.active{color:#1F73B7;background:#EDF7FF;}
+.apps-list{flex:1;padding:8px 12px;overflow-y:auto;}
+
+/* -- App Card ----------------------------------------------- */
+.app-card{
+  background:#fff;border:1px solid #E9EBED;border-radius:8px;
+  margin-bottom:10px;overflow:hidden;transition:box-shadow .2s;
+}
+.app-card.expanded{box-shadow:0 2px 8px rgba(0,0,0,.06);}
+.app-card-header{
+  display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;
+  user-select:none;
+}
+.app-card-header:hover{background:#FAFAFA;}
+.app-card-icon{
+  width:32px;height:32px;border-radius:6px;display:flex;align-items:center;
+  justify-content:center;font-size:16px;flex-shrink:0;
+}
+.app-card-header .app-name{flex:1;font-size:13px;font-weight:600;color:#2F3941;}
+.app-card-header .pin-icon{font-size:14px;color:#C2C8CC;cursor:pointer;}
+.app-card-header .pin-icon:hover{color:#68737D;}
+.app-card-header .chevron{font-size:11px;color:#999;transition:transform .2s;}
+.app-card.expanded .chevron{transform:rotate(180deg);}
+.app-card-body{display:none;border-top:1px solid #E9EBED;}
+.app-card.expanded .app-card-body{display:block;}
+
+/* ============================================================
+   CUSTOMER INTELLIGENCE APP
+   ============================================================ */
+.ci-tabs{
+  display:flex;border-bottom:1px solid #E9EBED;background:#FAFAFA;
+}
+.ci-tab{
+  flex:1;padding:9px 8px;text-align:center;font-size:12px;font-weight:600;
+  color:#68737D;background:none;border:none;border-bottom:2px solid transparent;
+  transition:all .15s;
+}
+.ci-tab:hover{color:#1F73B7;background:#EDF7FF;}
+.ci-tab.active{color:#1F73B7;border-bottom-color:#1F73B7;background:#fff;}
+.ci-tab-content{display:none;padding:14px;}
+.ci-tab-content.active{display:block;}
+
+/* -- Context Tab -------------------------------------------- */
+.ctx-section{margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid #F0F0F0;}
+.ctx-section:last-child{border-bottom:none;margin-bottom:0;padding-bottom:0;}
+.ctx-section h4{
+  font-size:11px;font-weight:700;color:#68737D;text-transform:uppercase;
+  letter-spacing:.5px;margin-bottom:10px;display:flex;align-items:center;gap:6px;
+}
+.ctx-row{display:flex;justify-content:space-between;align-items:center;padding:3px 0;font-size:13px;}
+.ctx-row .lbl{color:#68737D;font-weight:500;}
+.ctx-row .val{color:#2F3941;font-weight:500;text-align:right;max-width:55%;word-break:break-word;}
+.ctx-row .val.mono{font-family:"SF Mono",Monaco,Consolas,monospace;font-size:11px;}
+
+/* Funnel Stage */
+.funnel{display:flex;gap:2px;margin-bottom:4px;}
+.funnel-step{
+  flex:1;padding:6px 4px;text-align:center;font-size:10px;font-weight:600;
+  border-radius:4px;background:#F0F0F0;color:#999;position:relative;
+}
+.funnel-step.completed{background:#D1E8DF;color:#038153;}
+.funnel-step.current{background:#FFF4E0;color:#AD5E18;box-shadow:0 0 0 2px #FFCC80;}
+.funnel-step.error{background:#FFEEF0;color:#CC3340;box-shadow:0 0 0 2px #F8A0A8;}
+.funnel-step.pending{background:#F0F0F0;color:#BBB;}
+
+/* Status Badge */
+.badge{
+  display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;
+}
+.badge-green{background:#D1E8DF;color:#038153;}
+.badge-amber{background:#FFF4E0;color:#AD5E18;}
+.badge-red{background:#FFEEF0;color:#CC3340;}
+.badge-blue{background:#EDF7FF;color:#1F73B7;}
+.badge-gray{background:#F0F0F0;color:#68737D;}
+
+/* Services Grid */
+.services-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;}
+.svc-item{
+  text-align:center;padding:8px 4px;border:1px solid #E9EBED;border-radius:6px;
+}
+.svc-item .svc-icon{font-size:18px;display:block;margin-bottom:2px;}
+.svc-item .svc-name{font-size:11px;font-weight:600;color:#2F3941;}
+.svc-item .svc-status{font-size:10px;color:#68737D;}
+.svc-item.active{border-color:#D1E8DF;background:#F6FDF9;}
+.svc-item.pending{opacity:.6;}
+
+/* Ticket List */
+.ctx-ticket{
+  display:flex;align-items:center;gap:8px;padding:6px 0;font-size:13px;
+}
+.ctx-ticket .tid{color:#1F73B7;font-weight:600;font-size:12px;white-space:nowrap;}
+.ctx-ticket .tsubj{flex:1;color:#2F3941;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+
+/* Data Footer */
+.data-footer{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:8px 0 0 0;margin-top:8px;border-top:1px solid #E9EBED;
+  font-size:11px;color:#999;
+}
+.data-footer button{
+  font-size:12px;color:#1F73B7;background:none;border:none;cursor:pointer;font-weight:600;
+}
+.data-footer button:hover{text-decoration:underline;}
+
+/* -- AI Query Tab ------------------------------------------- */
+.quick-queries{margin-bottom:14px;}
+.quick-queries h4{
+  font-size:11px;font-weight:700;color:#68737D;text-transform:uppercase;
+  letter-spacing:.5px;margin-bottom:8px;
+}
+.qq-btn{
+  width:100%;padding:8px 12px;margin-bottom:6px;background:#FAFAFA;
+  border:1px solid #E9EBED;border-radius:6px;text-align:left;font-size:12px;
+  color:#2F3941;transition:all .15s;
+}
+.qq-btn:hover{background:#EDF7FF;border-color:#1F73B7;color:#1F73B7;}
+.qq-btn:disabled{opacity:.5;cursor:not-allowed;}
+
+.ai-chat{
+  border:1px solid #E9EBED;border-radius:8px;overflow:hidden;background:#fff;
+}
+.ai-messages{height:280px;overflow-y:auto;padding:12px;background:#FAFAFA;}
+.ai-msg{display:flex;gap:8px;margin-bottom:14px;}
+.ai-msg .ai-av{
+  width:28px;height:28px;min-width:28px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;font-size:14px;
+}
+.ai-msg.assistant .ai-av{background:#E8DEF8;color:#7B1FA2;}
+.ai-msg.user .ai-av{background:#D1E8DF;color:#038153;}
+.ai-msg .ai-body{
+  flex:1;padding:8px 12px;border-radius:8px;font-size:13px;line-height:1.5;min-width:0;
+}
+.ai-msg.assistant .ai-body{background:#fff;border:1px solid #E9EBED;}
+.ai-msg.user .ai-body{background:#EDF7FF;border:1px solid #C2DEFF;}
+.ai-body ul{margin:6px 0 0 16px;font-size:12px;}
+.ai-body li{margin-bottom:2px;}
+.ai-body .thinking{color:#999;font-style:italic;font-size:12px;}
+
+/* Data Card inside AI response */
+.data-card{
+  background:#F8F9F9;border:1px solid #E9EBED;border-radius:6px;
+  margin-top:8px;overflow:hidden;
+}
+.data-card-header{
+  padding:8px 12px;background:#fff;border-bottom:1px solid #E9EBED;
+  font-size:12px;font-weight:700;color:#2F3941;
+}
+.data-card-body{padding:8px 12px;}
+.data-card-row{display:flex;justify-content:space-between;padding:3px 0;font-size:12px;}
+.data-card-row .dc-lbl{color:#68737D;}
+.data-card-row .dc-val{font-weight:600;color:#2F3941;}
+.data-card-footer{
+  padding:6px 12px;background:#FAFAFA;border-top:1px solid #E9EBED;
+  font-size:10px;color:#999;display:flex;justify-content:space-between;
+}
+
+.ai-input-row{display:flex;border-top:1px solid #E9EBED;}
+.ai-input-row textarea{
+  flex:1;padding:10px 12px;border:none;font-size:13px;resize:none;
+  min-height:38px;max-height:80px;line-height:1.4;
+}
+.ai-input-row textarea:focus{outline:none;}
+.ai-input-row .send-btn{
+  padding:0 14px;background:#1F73B7;color:#fff;border:none;font-weight:700;
+  font-size:14px;
+}
+.ai-input-row .send-btn:hover{background:#155A8A;}
+.ai-input-row .send-btn:disabled{background:#C2C8CC;cursor:not-allowed;}
+
+/* (System Health tab removed — replaced by Agent Brief) */
+
+/* Execution Timeline */
+.exec-timeline{padding:0 4px;}
+.exec-step{
+  display:flex;align-items:flex-start;gap:10px;padding:8px 0;position:relative;
+}
+.exec-step:not(:last-child)::after{
+  content:'';position:absolute;left:11px;top:30px;width:2px;
+  height:calc(100% - 16px);background:#E9EBED;
+}
+.exec-step.completed:not(:last-child)::after{background:#D1E8DF;}
+.exec-dot{
+  width:24px;height:24px;min-width:24px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;font-size:12px;
+  z-index:1;
+}
+.exec-step.completed .exec-dot{background:#D1E8DF;color:#038153;}
+.exec-step.current .exec-dot{background:#FFF4E0;color:#AD5E18;}
+.exec-step.pending .exec-dot{background:#F0F0F0;color:#CCC;}
+.exec-info{flex:1;}
+.exec-info .e-name{font-size:13px;font-weight:600;color:#2F3941;}
+.exec-info .e-time{font-size:11px;color:#999;}
+
+/* ============================================================
+   AGENT BRIEF
+   ============================================================ */
+.brief-problem{
+  padding:10px 14px;border-radius:6px;margin-bottom:12px;font-size:13px;font-weight:500;
+}
+.brief-problem.confidence-high{background:#FFEEF0;border:1px solid #F8A0A8;color:#CC3340;}
+.brief-problem.confidence-medium{background:#FFF4E0;border:1px solid #FFE082;color:#AD5E18;}
+.brief-problem.confidence-low,.brief-problem.confidence-ai{background:#EDF7FF;border:1px solid #C2DEFF;color:#1F73B7;}
+.brief-problem .bp-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;opacity:.7;}
+
+.brief-contact{
+  display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px;
+  border-bottom:1px solid #F0F0F0;
+}
+.brief-contact:last-child{border-bottom:none;}
+.brief-contact .bc-channel{
+  display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;
+  text-transform:uppercase;min-width:48px;text-align:center;
+}
+.brief-contact .bc-channel.ch-email{background:#EDF7FF;color:#1F73B7;}
+.brief-contact .bc-channel.ch-mochi{background:#F3E8FF;color:#7B1FA2;}
+.brief-contact .bc-reason{flex:1;color:#2F3941;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.brief-contact .bc-date{font-size:11px;color:#999;white-space:nowrap;}
+
+.brief-step{
+  display:flex;align-items:flex-start;gap:8px;padding:6px 0;font-size:13px;
+}
+.brief-step .bs-icon{
+  width:22px;height:22px;min-width:22px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;font-size:11px;
+}
+.brief-step .bs-icon.type-investigate{background:#EDF7FF;color:#1F73B7;}
+.brief-step .bs-icon.type-ask_info{background:#FFF4E0;color:#AD5E18;}
+.brief-step .bs-icon.type-customer_action{background:#D1E8DF;color:#038153;}
+.brief-step .bs-icon.type-kb_article{background:#F3E8FF;color:#7B1FA2;}
+.brief-step .bs-text{flex:1;color:#2F3941;}
+.brief-step .bs-text a{color:#1F73B7;text-decoration:none;font-size:12px;}
+.brief-step .bs-text a:hover{text-decoration:underline;}
+
+.brief-kv{display:flex;justify-content:space-between;padding:3px 0;font-size:13px;}
+.brief-kv .bk-label{color:#68737D;font-weight:500;}
+.brief-kv .bk-value{color:#2F3941;font-weight:500;text-align:right;max-width:60%;word-break:break-word;}
+
+.timeline-event{
+  display:flex;align-items:flex-start;gap:10px;padding:6px 0;position:relative;
+}
+.timeline-event:not(:last-child)::after{
+  content:'';position:absolute;left:11px;top:28px;width:2px;
+  height:calc(100% - 12px);background:#E9EBED;
+}
+.timeline-icon{
+  width:24px;height:24px;min-width:24px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;font-size:11px;z-index:1;
+}
+.timeline-icon.type-order{background:#EDF7FF;color:#1F73B7;}
+.timeline-icon.type-onboarding{background:#D1E8DF;color:#038153;}
+.timeline-icon.type-payment{background:#FFF4E0;color:#AD5E18;}
+.timeline-icon.type-mochi{background:#F3E8FF;color:#7B1FA2;}
+.timeline-icon.type-zendesk{background:#FFEEF0;color:#CC3340;}
+.timeline-info{flex:1;}
+.timeline-info .tl-label{font-size:12px;font-weight:500;color:#2F3941;}
+.timeline-info .tl-date{font-size:11px;color:#999;}
+
+/* ============================================================
+   LOADING SPINNER
+   ============================================================ */
+@keyframes pulse-dots {
+  0%,80%,100%{opacity:.3;} 40%{opacity:1;}
+}
+.loading-dots span{
+  display:inline-block;width:6px;height:6px;margin:0 2px;
+  background:#7B1FA2;border-radius:50%;animation:pulse-dots 1.4s infinite;
+}
+.loading-dots span:nth-child(2){animation-delay:.2s;}
+.loading-dots span:nth-child(3){animation-delay:.4s;}
+
+/* Tools used badge */
+.tools-badge{
+  display:inline-flex;align-items:center;gap:4px;margin-top:6px;padding:3px 8px;
+  background:#F3E8FF;border:1px solid #E8DEF8;border-radius:4px;
+  font-size:10px;color:#7B1FA2;font-weight:600;
+}
+
+/* ============================================================
+   TOAST NOTIFICATIONS
+   ============================================================ */
+.toast{
+  position:fixed;bottom:20px;right:20px;padding:10px 20px;border-radius:6px;
+  font-size:13px;font-weight:500;color:#fff;background:#038153;
+  box-shadow:0 4px 12px rgba(0,0,0,.15);transform:translateY(20px);
+  opacity:0;transition:all .3s;z-index:1000;
+}
+.toast.show{transform:translateY(0);opacity:1;}
+.toast.error{background:#CC3340;}
+
+/* ============================================================
+   SCROLLBARS
+   ============================================================ */
+::-webkit-scrollbar{width:6px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:#D8DCDE;border-radius:3px;}
+::-webkit-scrollbar-thumb:hover{background:#BBBBBB;}
+
+/* ============================================================
+   CONTEXT SEARCH
+   ============================================================ */
+.ctx-search{display:flex;gap:6px;margin-bottom:12px;}
+.ctx-search input{
+  flex:1;padding:7px 10px;border:1px solid #D8DCDE;border-radius:4px;font-size:13px;
+}
+.ctx-search button{
+  padding:7px 14px;background:#1F73B7;color:#fff;border:none;border-radius:4px;
+  font-size:12px;font-weight:600;white-space:nowrap;
+}
+.ctx-search button:hover{background:#155A8A;}
+.ctx-search button:disabled{background:#C2C8CC;cursor:not-allowed;}
+.ctx-placeholder{
+  padding:20px;text-align:center;color:#999;font-size:13px;
+  background:#FAFAFA;border:1px dashed #D8DCDE;border-radius:6px;
+}
+</style>
+</head>
+<body>
+
+<!-- ============================================================
+     TOP BAR
+     ============================================================ -->
+<div class="workspace">
+<div class="topbar">
+  <div class="logo">G</div>
+  <div class="ticket-tab">
+    [FIRING:1] SLO - Gate... #9546
+    <span class="close-tab">&#x2715;</span>
+  </div>
+  <div class="add-tab">+ Add</div>
+  <div class="topbar-spacer"></div>
+  <div class="topbar-icons">
+    <button title="Search">&#x1F50D;</button>
+    <button title="Notifications">&#x1F514;</button>
+    <button title="Chat">&#x1F4AC;</button>
+    <button title="Apps">&#x2B1C;</button>
+    <button title="Profile" style="font-size:20px;">&#x1F464;</button>
+  </div>
+</div>
+
+<!-- META BAR -->
+<div class="meta-bar">
+  <span class="meta-tag org">No organization</span>
+  <span class="meta-tag user">xujinshuo</span>
+  <span class="meta-tag status">Solved</span>
+  <span class="meta-tag type">Problem #9546</span>
+</div>
+
+<!-- ============================================================
+     MAIN 3-PANEL LAYOUT
+     ============================================================ -->
+<div class="main-content">
+
+<!-- ======================== LEFT PANEL ======================== -->
+<div class="left-panel">
+  <div class="prop-group">
+    <div class="prop-label">Assignee* <span class="take-it">take it</span></div>
+    <select class="prop-select">
+      <option>Support/xujinshuo</option>
+      <option>Support/virender</option>
+    </select>
+  </div>
+  <div class="prop-group">
+    <div class="prop-label">Followers <span class="info-icon">i</span></div>
+    <select class="prop-select"><option>-</option></select>
+  </div>
+  <div class="prop-group">
+    <div class="prop-label">Sharing</div>
+    <select class="prop-select"><option>-</option></select>
+  </div>
+  <div class="prop-group">
+    <div class="prop-label">Form</div>
+    <select class="prop-select">
+      <option>Rockstar</option>
+      <option>Default</option>
+    </select>
+  </div>
+  <div class="prop-group">
+    <div class="prop-label">Tags</div>
+    <div class="tags-container">
+      <span class="tag">csat_chat</span>
+      <span class="tag">intent__software__connection_i...</span>
+      <span class="tag">intent_confidence__high</span>
+      <span class="tag">language__en</span>
+      <span class="tag">language_confidence__low</span>
+      <span class="tag">pagerduty</span>
+      <span class="tag">sentiment__neutral</span>
+      <span class="tag">sentiment_confidence__high</span>
+    </div>
+  </div>
+  <div class="prop-group">
+    <div class="prop-label">Type</div>
+    <select class="prop-select">
+      <option>Problem</option>
+      <option>Incident</option>
+      <option>Question</option>
+      <option>Task</option>
+    </select>
+  </div>
+  <div class="prop-group">
+    <div class="prop-label">Inquiry Type *</div>
+    <select class="prop-select">
+      <option>-</option>
+      <option>Connectivity</option>
+      <option>Billing</option>
+      <option>Order</option>
+      <option>eSIM Activation</option>
+    </select>
+  </div>
+</div>
+
+<!-- ======================== CENTER PANEL ======================== -->
+<div class="center-panel">
+  <!-- Ticket Header -->
+  <div class="ticket-header">
+    <div class="ticket-subject">[FIRING:1] SLO - Gateway Layer - API Latency (P95) - P2 SLO (meow-online.rockstar-automatio...</div>
+    <div class="ticket-meta-row">
+      <span>Via API</span>
+      <span class="sep">|</span>
+      <span>Intent</span>
+      <span class="intent-tag">Connection issue</span>
+      <span class="sep">|</span>
+      <span class="sentiment">&#x1F610; Neutral</span>
+    </div>
+    <div class="ticket-actions">
+      <button title="Macro">&#x2630;</button>
+      <button title="Filter">&#x25BD;</button>
+      <button title="Sort">&#x21C5;</button>
+      <button title="More">&#x22EF;</button>
+      <span class="spacer"></span>
+    </div>
+  </div>
+
+  <!-- AI Summary -->
+  <div class="ai-summary-link" onclick="showToast('AI summary panel would open here')">
+    &#x1F4DD; View ticket summary
+  </div>
+
+  <!-- Conversation -->
+  <div class="conversation">
+    <!-- Message 1 -->
+    <div class="message">
+      <div class="msg-avatar">XJ</div>
+      <div class="msg-body">
+        <div class="msg-header">
+          <span class="name">xujinshuo</span>
+          <span class="direction">&#x21A9;</span>
+          <span class="time">Jan 25 08:24</span>
+        </div>
+        <div class="msg-text">
+          <a href="#">https://rockstar-automations.pagerduty.com/incidents/Q3WTHHR4DULYPX</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Message 2 -->
+    <div class="message">
+      <div class="msg-avatar">XJ</div>
+      <div class="msg-body">
+        <div class="msg-header">
+          <span class="name">xujinshuo</span>
+          <span class="direction">&#x21A9;</span>
+          <span class="time">Jan 25 08:24</span>
+        </div>
+        <div class="msg-text">
+          To: xujinshuo <span class="show-more">Show more</span>
+          <div class="json-block">{"firing":"\nValue: A=5.2499999999999964, C=1\nLabels:\n - alertname = SLO - Gateway Layer - API Latency (P95) - P2\n - grafana_folder = SLO\n - host = meow-online.rockstar-automations.com\n - severity = error\nAnnotations:\nSource: https://grafana.rockstar-automations.com/alerting/grafana/af3phv2r34qv4d/view?orgId=1\nSilence: https://grafana.rockstar-automations.com/alerting/silence/new?alertmanager=grafana&matcher=__alert_rule_uid__%3Daf3phv2r34qv4d&matcher=host%3Dmeow-online.rockstar-automations.com&matcher=severity%3Derror&orgId=1\nDashboard: https://grafana.rockstar-automations.com/d/87608473-2d59-4fc5-94f6-92cb6a9d2ae4?from=1769354620000&orgId=1&to=1769358251098\nPanel: https://grafana.rockstar-automations.com/d/87608473-2d59-4fc5-94f6-92cb6a9d2ae4?from=1769354620000&orgId=1&to=1769358251098&viewPanel=8\n","num_firing":"1","num_resolved":"0","resolved":""}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Reply Box -->
+  <div class="reply-box">
+    <textarea placeholder="Type your reply here..."></textarea>
+    <div class="reply-actions">
+      <button class="btn btn-secondary">Submit as Open</button>
+      <button class="btn btn-primary">Submit as Solved</button>
+    </div>
+  </div>
+</div>
+
+<!-- ======================== RIGHT PANEL ======================== -->
+<div class="right-panel">
+  <div class="right-panel-header">
+    <h2>Apps</h2>
+    <div class="header-icons">
+      <button title="Refresh">&#x21BB;</button>
+      <button title="Settings">&#x2699;</button>
+    </div>
+  </div>
+
+  <div class="apps-list">
+    <!-- =====================================================
+         CUSTOMER INTELLIGENCE APP (EXPANDED)
+         ===================================================== -->
+    <div class="app-card expanded" id="app-ci">
+      <div class="app-card-header" onclick="toggleApp('app-ci')">
+        <div class="app-card-icon" style="background:linear-gradient(135deg,#7B1FA2,#1F73B7);color:#fff;">AI</div>
+        <span class="app-name">Customer Intelligence</span>
+        <span class="pin-icon" title="Pin">&#x1F4CC;</span>
+        <span class="chevron">&#x25BC;</span>
+      </div>
+      <div class="app-card-body">
+        <!-- Shared search bar (above tabs) -->
+        <div class="ctx-search" style="padding:12px 14px 0 14px;margin-bottom:0;">
+          <input type="text" id="ctx-search-input" placeholder="Enter customer email...">
+          <button id="ctx-search-btn" onclick="searchCustomer()">Look Up</button>
+        </div>
+
+        <!-- Tabs -->
+        <div class="ci-tabs">
+          <button class="ci-tab active" onclick="switchTab('agent-brief',this)">Agent Brief</button>
+          <button class="ci-tab" onclick="switchTab('context',this)">Context</button>
+          <button class="ci-tab" onclick="switchTab('ai-query',this)">AI Query</button>
+        </div>
+
+        <!-- ========== TAB 1: AGENT BRIEF (default) ========== -->
+        <div class="ci-tab-content active" id="tab-agent-brief">
+          <div id="agent-brief-data">
+            <div class="ctx-placeholder">Enter a customer email to load the agent brief.</div>
+          </div>
+        </div>
+
+        <!-- ========== TAB 2: CONTEXT ========== -->
+        <div class="ci-tab-content" id="tab-context">
+          <div id="ctx-data">
+            <div class="ctx-placeholder">
+              Enter a customer email to load data from Databricks + Boss API.
+            </div>
+          </div>
+
+          <div class="data-footer">
+            <span>Databricks + Boss API</span>
+            <button onclick="searchCustomer()">&#x21BB; Refresh</button>
+          </div>
+        </div>
+
+        <!-- ========== TAB 3: AI QUERY ========== -->
+        <div class="ci-tab-content" id="tab-ai-query">
+          <div class="quick-queries">
+            <h4>Quick Questions</h4>
+            <button class="qq-btn" onclick="askQuick('Search for customer sarah.chen@email.com')">Search for a customer</button>
+            <button class="qq-btn" onclick="askQuick('How many open tickets are there today?')">Open ticket count today</button>
+            <button class="qq-btn" onclick="askQuick('What is the port-in success rate for the last 7 days?')">Port-in success rate</button>
+            <button class="qq-btn" onclick="askQuick('Check network outages for ZIP 10001')">Check network outages</button>
+            <button class="qq-btn" onclick="askQuick('What is the Mochi escalation rate this week?')">Mochi escalation rate</button>
+          </div>
+          <div class="ai-chat">
+            <div class="ai-messages" id="ai-messages">
+              <div class="ai-msg assistant">
+                <div class="ai-av">&#x2728;</div>
+                <div class="ai-body">
+                  I'm connected to <strong>Boss API</strong> and <strong>Databricks</strong>. Ask me anything — customer lookups, order status, eSIM diagnostics, ticket analytics, network outages, and more.
+                </div>
+              </div>
+            </div>
+            <div class="ai-input-row">
+              <textarea id="ai-input" placeholder="Ask anything about customers, orders, tickets..." rows="1" onkeydown="handleAIKey(event)"></textarea>
+              <button class="send-btn" id="send-btn" onclick="sendAI()">&#x27A4;</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- =====================================================
+         OTHER APPS (COLLAPSED)
+         ===================================================== -->
+    <div class="app-card" id="app-jira">
+      <div class="app-card-header" onclick="toggleApp('app-jira')">
+        <div class="app-card-icon" style="background:#0052CC;color:#fff;font-size:14px;font-weight:700;">J</div>
+        <span class="app-name">JIRA</span>
+        <span class="pin-icon" title="Pin">&#x1F4CC;</span>
+        <span class="chevron">&#x25BC;</span>
+      </div>
+      <div class="app-card-body">
+        <div style="padding:14px;font-size:13px;color:#68737D;">No linked JIRA issues.</div>
+      </div>
+    </div>
+
+    <div class="app-card" id="app-network">
+      <div class="app-card-header" onclick="toggleApp('app-network')">
+        <div class="app-card-icon" style="background:#038153;color:#fff;">&#x1F4E1;</div>
+        <span class="app-name">Network Outage Checker</span>
+        <span class="pin-icon" title="Pin">&#x1F4CC;</span>
+        <span class="chevron">&#x25BC;</span>
+      </div>
+      <div class="app-card-body">
+        <div style="padding:14px;font-size:13px;color:#68737D;">No critical outages detected.</div>
+      </div>
+    </div>
+
+    <div class="app-card" id="app-braze">
+      <div class="app-card-header" onclick="toggleApp('app-braze')">
+        <div class="app-card-icon" style="background:#00C4B3;color:#fff;font-weight:700;">B</div>
+        <span class="app-name">Braze Email Viewer</span>
+        <span class="pin-icon" title="Pin">&#x1F4CC;</span>
+        <span class="chevron">&#x25BC;</span>
+      </div>
+      <div class="app-card-body">
+        <div style="padding:14px;font-size:13px;color:#68737D;">No recent emails sent.</div>
+      </div>
+    </div>
+
+    <div class="app-card" id="app-connectx">
+      <div class="app-card-header" onclick="toggleApp('app-connectx')">
+        <div class="app-card-icon" style="background:#FF6B35;color:#fff;font-weight:700;">CX</div>
+        <span class="app-name">Connect X Prod</span>
+        <span class="pin-icon" title="Pin">&#x1F4CC;</span>
+        <span class="chevron">&#x25BC;</span>
+      </div>
+      <div class="app-card-body">
+        <div style="padding:14px;font-size:13px;color:#68737D;">Customer not linked.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div><!-- /main-content -->
+</div><!-- /workspace -->
+
+<!-- ============================================================
+     JAVASCRIPT
+     ============================================================ -->
+<script>
+// ── State ────────────────────────────────────────────────────
+let isLoading = false;
+const sessionId = 'session-' + Date.now();
+
+// ── App expand / collapse ────────────────────────────────────
+function toggleApp(id) {
+  document.getElementById(id).classList.toggle('expanded');
+}
+
+// ── Tab Switching ────────────────────────────────────────────
+function switchTab(tabId, btn) {
+  document.querySelectorAll('.ci-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.ci-tab-content').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('tab-' + tabId).classList.add('active');
+}
+
+// ── Toast ────────────────────────────────────────────────────
+function showToast(msg, isError) {
+  const t = document.createElement('div');
+  t.className = 'toast' + (isError ? ' error' : '');
+  t.textContent = msg;
+  document.body.appendChild(t);
+  requestAnimationFrame(() => t.classList.add('show'));
+  setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 300); }, 3000);
+}
+
+// ── Escape HTML ──────────────────────────────────────────────
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+// ── Markdown-lite to HTML ────────────────────────────────────
+function markdownToHtml(text) {
+  return text
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\n- /g, '\n&bull; ')
+    .replace(/\n\d+\. /g, function(m) { return '\n' + m.trim() + ' '; })
+    .replace(/\n/g, '<br>');
+}
+
+// ── AI Message helpers ───────────────────────────────────────
+function addAIMsg(html, sender) {
+  const container = document.getElementById('ai-messages');
+  const div = document.createElement('div');
+  div.className = 'ai-msg ' + sender;
+  const avContent = sender === 'user' ? '&#x1F464;' : '&#x2728;';
+  div.innerHTML = '<div class="ai-av">' + avContent + '</div><div class="ai-body">' + html + '</div>';
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+  return div;
+}
+
+function addLoadingMsg() {
+  return addAIMsg('<div class="loading-dots"><span></span><span></span><span></span></div><span class="thinking"> Thinking & querying data sources...</span>', 'assistant');
+}
+
+// ── Send to real backend ─────────────────────────────────────
+async function callChat(message) {
+  const resp = await fetch('/api/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message, sessionId }),
+  });
+
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({ error: 'Server error' }));
+    throw new Error(err.error || 'Request failed');
+  }
+
+  return resp.json();
+}
+
+// ── Send AI message ──────────────────────────────────────────
+async function sendAI() {
+  if (isLoading) return;
+  const input = document.getElementById('ai-input');
+  const text = input.value.trim();
+  if (!text) return;
+
+  addAIMsg(escapeHtml(text), 'user');
+  input.value = '';
+  input.style.height = 'auto';
+
+  isLoading = true;
+  document.getElementById('send-btn').disabled = true;
+  document.querySelectorAll('.qq-btn').forEach(b => b.disabled = true);
+
+  const loading = addLoadingMsg();
+  const startTime = Date.now();
+
+  try {
+    const data = await callChat(text);
+    loading.remove();
+
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+    let html = markdownToHtml(data.response || 'No response received.');
+
+    // Show tools used
+    if (data.toolsUsed && data.toolsUsed.length > 0) {
+      const toolNames = data.toolsUsed.map(t => t.tool).join(', ');
+      html += '<div class="tools-badge">Tools: ' + escapeHtml(toolNames) + ' &middot; ' + elapsed + 's</div>';
+    }
+
+    addAIMsg(html, 'assistant');
+  } catch (err) {
+    loading.remove();
+    addAIMsg('<span style="color:#CC3340;">Error: ' + escapeHtml(err.message) + '</span>', 'assistant');
+  } finally {
+    isLoading = false;
+    document.getElementById('send-btn').disabled = false;
+    document.querySelectorAll('.qq-btn').forEach(b => b.disabled = false);
+  }
+}
+
+function askQuick(question) {
+  if (isLoading) return;
+  document.getElementById('ai-input').value = question;
+  sendAI();
+}
+
+function handleAIKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendAI(); }
+}
+
+// Auto-resize textarea
+document.getElementById('ai-input').addEventListener('input', function() {
+  this.style.height = 'auto';
+  this.style.height = Math.min(this.scrollHeight, 80) + 'px';
+});
+
+// ── Context Tab: Customer Lookup ─────────────────────────────
+async function searchCustomer() {
+  const input = document.getElementById('ctx-search-input');
+  const email = input.value.trim();
+  if (!email) { showToast('Enter a customer email', true); return; }
+
+  const btn = document.getElementById('ctx-search-btn');
+  const dataDiv = document.getElementById('ctx-data');
+  const briefDiv = document.getElementById('agent-brief-data');
+  btn.disabled = true;
+  btn.textContent = 'Looking up...';
+  dataDiv.innerHTML = '<div class="ctx-placeholder">Querying Databricks + Boss API...</div>';
+  briefDiv.innerHTML = '<div class="ctx-placeholder">Loading agent brief...</div>';
+
+  try {
+    // Fire both calls in parallel
+    const [lookupResp, briefResp] = await Promise.all([
+      fetch('/api/customer/lookup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      }),
+      fetch('/api/agent-brief', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      }),
+    ]);
+
+    const lookupData = await lookupResp.json();
+    const briefData = await briefResp.json();
+
+    // Render Context tab
+    if (lookupData.error) {
+      dataDiv.innerHTML = '<div class="ctx-placeholder">Error: ' + escapeHtml(String(lookupData.error)) + '</div>';
+    } else if (!lookupData.found) {
+      dataDiv.innerHTML = '<div class="ctx-placeholder">No customer found for this email.</div>';
+    } else {
+      renderCustomerContext(lookupData, dataDiv);
+    }
+
+    // Render Agent Brief tab
+    if (briefData.error) {
+      briefDiv.innerHTML = '<div class="ctx-placeholder">Error: ' + escapeHtml(String(briefData.error)) + '</div>';
+    } else if (!briefData.found) {
+      briefDiv.innerHTML = '<div class="ctx-placeholder">No customer found for this email.</div>';
+    } else {
+      renderAgentBrief(briefData, briefDiv);
+    }
+  } catch (err) {
+    dataDiv.innerHTML = '<div class="ctx-placeholder">Failed to connect. Is the server running?</div>';
+    briefDiv.innerHTML = '<div class="ctx-placeholder">Failed to connect. Is the server running?</div>';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Look Up';
+  }
+}
+
+// ── Context Render Helpers ────────────────────────────────────
+function fmtDate(v) {
+  if (!v || v === 'null') return '—';
+  try { var d = new Date(v); return isNaN(d) ? v : d.toLocaleDateString('en-US', {month:'short',day:'numeric',year:'numeric'}); }
+  catch(e) { return v; }
+}
+
+function statusBadge(v) {
+  if (!v || v === 'null') return '<span class="badge badge-gray">—</span>';
+  var u = String(v).toUpperCase().replace(/[_\-\s]/g, '');
+  var cls = 'badge-gray';
+  if (['ACTIVE','COMPLETED','DONE','ACTIVATED','SUCCESS','RELEASED'].indexOf(u) !== -1) cls = 'badge-green';
+  else if (['INPROGRESS','PENDING','DRAFT','INSTALLED','PROCESSING','WAITING','SUBMITTED'].indexOf(u) !== -1) cls = 'badge-amber';
+  else if (['SUSPENDED','FAILED','CANCELLED','ERROR','REJECTED','TERMINATED'].indexOf(u) !== -1) cls = 'badge-red';
+  return '<span class="badge ' + cls + '">' + escapeHtml(v) + '</span>';
+}
+
+function ctxRow(label, value, mono) {
+  return '<div class="ctx-row"><span class="lbl">' + escapeHtml(label) + '</span><span class="val' + (mono ? ' mono' : '') + '">' + (value || '—') + '</span></div>';
+}
+
+// RAG funnel: Account → Payment → Number → eSIM → Airvet
+// green (completed) = done, yellow (current) = incomplete, red (error) = error/exception, gray (pending) = not reached
+function renderFunnel(data) {
+  var order = data.orders && data.orders[0];
+  var boss = extractFromBossApi(data);
+  var paymentDone = !!(order && order.paymentCompleted) || boss.hasActiveProducts;
+  var esimProfile = data.esimProfile;
+  var esimStatus = esimProfile ? String(esimProfile.status || '').toUpperCase() : '';
+  var airvet = data.airvet;
+
+  // 1. Account (order creation)
+  var accountCls = order ? 'completed' : 'pending';
+
+  // 2. Payment
+  var paymentCls = 'pending';
+  if (paymentDone) paymentCls = 'completed';
+  else if (order && order.status && order.status.toUpperCase() === 'FAILED') paymentCls = 'error';
+  else if (order) paymentCls = 'current';
+
+  // 3. Number (new or porting — MSISDN assigned)
+  var numberCls = 'pending';
+  if (boss.msisdn) numberCls = 'completed';
+  else if (paymentDone) numberCls = 'current';
+
+  // 4. eSIM (Boss API profile status)
+  var esimCls = 'pending';
+  if (['INSTALLED', 'ENABLED'].indexOf(esimStatus) !== -1) {
+    esimCls = 'completed';
+  } else if (['ERROR', 'FAILED'].indexOf(esimStatus) !== -1) {
+    esimCls = 'error';
+  } else if (esimStatus || boss.iccid) {
+    esimCls = 'current'; // provisioned but not installed
+  }
+
+  // 5. Airvet
+  var airvetCls = 'pending';
+  if (airvet && airvet.activated) airvetCls = 'completed';
+  else if (esimCls === 'completed') airvetCls = 'current';
+
+  var stages = [
+    { name: 'Account', cls: accountCls },
+    { name: 'Payment', cls: paymentCls },
+    { name: 'Number', cls: numberCls },
+    { name: 'eSIM', cls: esimCls },
+    { name: 'Airvet', cls: airvetCls },
+  ];
+
+  var html = '<div class="funnel">';
+  for (var i = 0; i < stages.length; i++) {
+    html += '<div class="funnel-step ' + stages[i].cls + '">' + stages[i].name + '</div>';
+  }
+  html += '</div>';
+  return html;
+}
+
+// Extract data from Boss API's nested individual/simProducts structures.
+// Boss API nests MSISDN/ICCID/IMSI under products[].realizingResource[]
+// and IMEI under products[].productCharacteristic[].
+function extractFromBossApi(data) {
+  var ind = data.individual;
+  var sim = data.simProducts;
+  var info = { msisdn: null, imei: null, iccid: null, imsi: null, simStatus: null, numberStatus: null, hasActiveProducts: false };
+
+  // -- Customer/number status from individual.customers[0] (more accurate than individual.status)
+  if (ind && ind.customers && ind.customers.length > 0 && ind.customers[0].status) {
+    info.numberStatus = ind.customers[0].status;
+  }
+
+  // -- Scan individual.products[] for MSISDN, IMEI, active product check
+  if (ind && ind.products) {
+    for (var i = 0; i < ind.products.length; i++) {
+      var prod = ind.products[i];
+      var ps = (prod.status || '').toLowerCase();
+      if (ps === 'active' || ps === 'pendingactive') info.hasActiveProducts = true;
+      // realizingResource: MSISDN, ICCID, IMSI
+      if (prod.realizingResource) {
+        for (var j = 0; j < prod.realizingResource.length; j++) {
+          var r = prod.realizingResource[j];
+          if (r.type === 'MSISDN' && r.value) info.msisdn = r.value;
+          if (r.type === 'ICCID' && r.value) info.iccid = r.value;
+          if (r.type === 'IMSI' && r.value) info.imsi = r.value;
+        }
+      }
+      // productCharacteristic: "BYOD IMEI", "IMEI"
+      if (prod.productCharacteristic) {
+        for (var j = 0; j < prod.productCharacteristic.length; j++) {
+          var ch = prod.productCharacteristic[j];
+          if (ch.name && ch.name.toUpperCase().indexOf('IMEI') !== -1 && ch.value) {
+            info.imei = ch.value;
+          }
+        }
+      }
+    }
+  }
+
+  // -- SIM status from simProducts.active[]
+  if (sim && sim.active && sim.active.length > 0) {
+    info.simStatus = sim.active[0].status;
+    // Also grab ICCID/IMSI from simProducts if not already found
+    for (var i = 0; i < sim.active.length; i++) {
+      if (sim.active[i].realizingResource) {
+        for (var j = 0; j < sim.active[i].realizingResource.length; j++) {
+          var r = sim.active[i].realizingResource[j];
+          if (r.type === 'ICCID' && r.value && !info.iccid) info.iccid = r.value;
+          if (r.type === 'IMSI' && r.value && !info.imsi) info.imsi = r.value;
+        }
+      }
+    }
+  }
+
+  // -- Fallbacks: msisdn from backend extraction or portinResponse
+  if (!info.msisdn && data.msisdn) info.msisdn = data.msisdn;
+
+  return info;
+}
+
+// ── Main Context Renderer ────────────────────────────────────
+function renderCustomerContext(data, container) {
+  var c = data.customer;
+  var order = data.orders && data.orders[0];
+  var boss = extractFromBossApi(data);
+  var msisdn = boss.msisdn || c.phone;
+  var isPortIn = data.orders && data.orders.some(function(o) {
+    return o.selectNumberType === 'PORTIN' || (o.portinResponse && o.portinResponse.indexOf('PortInMSISDN') !== -1);
+  });
+
+  var html = '';
+
+  // ── Customer ──
+  html += '<div class="ctx-section"><h4>CUSTOMER</h4>';
+  html += ctxRow('Name', escapeHtml(c.name || '—'));
+  html += ctxRow('Email', escapeHtml(c.email || '—'));
+  html += ctxRow('Phone', escapeHtml(c.phone || '—'));
+  html += ctxRow('Created', fmtDate(order ? order.createdAt : null));
+  var cohortVal = c.cohort || 'Regular';
+  var cohortBadge;
+  if (cohortVal === 'S100') cohortBadge = '<span class="badge badge-blue">S100</span>';
+  else if (cohortVal === 'FDT') cohortBadge = '<span class="badge badge-amber">FDT</span>';
+  else cohortBadge = '<span class="badge badge-gray">Regular</span>';
+  html += ctxRow('Cohort', cohortBadge);
+  html += '</div>';
+
+  // ── Account Stage (funnel) ──
+  html += '<div class="ctx-section"><h4>ACCOUNT STAGE</h4>';
+  html += renderFunnel(data);
+  html += '</div>';
+
+  // ── Order ──
+  if (order) {
+    html += '<div class="ctx-section"><h4>ORDER</h4>';
+    html += ctxRow('Order ID', '<span class="mono">' + escapeHtml(order.orderId || '—') + '</span>');
+    html += ctxRow('Status', statusBadge(order.status));
+    var paid = order.paymentCompleted || boss.hasActiveProducts;
+    html += ctxRow('Payment', paid ? statusBadge('Done') : statusBadge('Pending'));
+    html += ctxRow('Created', fmtDate(order.createdAt));
+    if (data.orders.length > 1) {
+      html += ctxRow('Total Orders', '<span class="badge badge-blue">' + data.orders.length + '</span>');
+    }
+    html += '</div>';
+  } else {
+    html += '<div class="ctx-section"><h4>ORDER</h4>';
+    html += '<div style="font-size:12px;color:#999;padding:4px 0;">No orders found</div>';
+    html += '</div>';
+  }
+
+  // ── Line & SIM (from Boss API individual + simProducts) ──
+  html += '<div class="ctx-section"><h4>LINE & SIM</h4>';
+  html += ctxRow('Mobile #', msisdn ? escapeHtml(msisdn) : '—');
+  html += ctxRow('# Status', boss.numberStatus ? statusBadge(boss.numberStatus) : '<span class="badge badge-gray">—</span>');
+  if (isPortIn) {
+    var portVal;
+    if (data.portStatus) {
+      portVal = statusBadge(data.portStatus.status || data.portStatus.portStatus || 'See raw data');
+    } else {
+      portVal = '<span class="badge badge-gray">N/A</span>';
+    }
+    html += ctxRow('Port-in', portVal);
+  }
+  var esimProfileStatus = data.esimProfile ? data.esimProfile.status : null;
+  html += ctxRow('eSIM Status', esimProfileStatus ? statusBadge(esimProfileStatus) : (boss.simStatus ? statusBadge(boss.simStatus) : '<span class="badge badge-gray">—</span>'));
+  html += ctxRow('IMEI', boss.imei ? escapeHtml(boss.imei) : '—', true);
+  if (boss.iccid) {
+    html += ctxRow('ICCID', escapeHtml(boss.iccid), true);
+  }
+  html += '</div>';
+
+  // ── Airvet ──
+  html += '<div class="ctx-section"><h4>AIRVET</h4>';
+  var airvet = data.airvet;
+  if (airvet && airvet.activated) {
+    html += ctxRow('Status', '<span class="badge badge-green">Activated</span>');
+    html += ctxRow('Activated', fmtDate(airvet.activatedAt));
+  } else {
+    html += ctxRow('Status', '<span class="badge badge-amber">Not activated</span>');
+  }
+  html += '</div>';
+
+  // ── Mochi Summary ──
+  if (data.mochi && data.mochi.length > 0) {
+    var m = data.mochi[0];
+    html += '<div class="ctx-section"><h4>MOCHI SUMMARY</h4>';
+    html += ctxRow('Category', escapeHtml(m.category || '—'));
+    html += ctxRow('Issue', escapeHtml(m.title || '—'));
+    html += ctxRow('Escalated', m.escalated === 'true' ? '<span class="badge badge-red">Yes</span>' : '<span class="badge badge-green">No</span>');
+    html += ctxRow('Messages', escapeHtml(String(m.message_count || '—')));
+    html += ctxRow('Date', fmtDate(m.created_at));
+    if (data.mochi.length > 1) {
+      html += ctxRow('More Chats', '<span class="badge badge-blue">' + (data.mochi.length - 1) + ' more</span>');
+    }
+    html += '</div>';
+  }
+
+  // ── Raw data toggle ──
+  html += '<div class="ctx-section">';
+  html += '<details><summary style="font-size:11px;font-weight:700;color:#68737D;text-transform:uppercase;cursor:pointer;">RAW API DATA</summary>';
+  html += '<pre style="font-size:10px;line-height:1.4;color:#666;max-height:200px;overflow:auto;margin-top:6px;background:#F8F9F9;padding:8px;border-radius:4px;">' + escapeHtml(JSON.stringify(data, null, 2)) + '</pre>';
+  html += '</details></div>';
+
+  container.innerHTML = html;
+}
+
+// ── Agent Brief Renderer ─────────────────────────────────────
+function briefFmtDate(v) {
+  if (!v || v === 'null') return '';
+  try { var d = new Date(v); return isNaN(d) ? v : d.toLocaleDateString('en-US', {month:'short',day:'numeric',year:'numeric'}); }
+  catch(e) { return v; }
+}
+
+function renderAgentBrief(data, container) {
+  var html = '';
+
+  // 1. PREVIOUS CONTACTS
+  html += '<div class="ctx-section"><h4>PREVIOUS CONTACTS</h4>';
+  if (data.previousContacts && data.previousContacts.length > 0) {
+    for (var i = 0; i < Math.min(data.previousContacts.length, 8); i++) {
+      var c = data.previousContacts[i];
+      var chCls = c.channel === 'Mochi' ? 'ch-mochi' : 'ch-email';
+      html += '<div class="brief-contact">';
+      html += '<span class="bc-channel ' + chCls + '">' + escapeHtml(c.channel) + '</span>';
+      html += '<span class="bc-reason">' + escapeHtml(c.reason) + '</span>';
+      html += '<span class="bc-date">' + briefFmtDate(c.date) + '</span>';
+      html += '</div>';
+    }
+  } else {
+    html += '<div style="font-size:12px;color:#999;padding:4px 0;">No previous contacts found</div>';
+  }
+  html += '</div>';
+
+  // 2. CURRENT PROBLEM
+  html += '<div class="ctx-section"><h4>CURRENT PROBLEM</h4>';
+  if (data.currentProblem) {
+    var conf = data.currentProblem.confidence || 'low';
+    html += '<div class="brief-problem confidence-' + conf + '">';
+    html += '<div class="bp-label">Confidence: ' + escapeHtml(conf) + '</div>';
+    html += escapeHtml(data.currentProblem.problem);
+    html += '</div>';
+  } else {
+    html += '<div style="font-size:12px;color:#999;padding:4px 0;">No clear problem identified — review conversation history</div>';
+  }
+  html += '</div>';
+
+  // 3. INFO COLLECTED
+  html += '<div class="ctx-section"><h4>INFO COLLECTED</h4>';
+  var infoKeys = data.infoCollected ? Object.keys(data.infoCollected) : [];
+  if (infoKeys.length > 0) {
+    for (var i = 0; i < infoKeys.length; i++) {
+      html += '<div class="brief-kv">';
+      html += '<span class="bk-label">' + escapeHtml(infoKeys[i]) + '</span>';
+      html += '<span class="bk-value">' + escapeHtml(String(data.infoCollected[infoKeys[i]])) + '</span>';
+      html += '</div>';
+    }
+  } else {
+    html += '<div style="font-size:12px;color:#999;padding:4px 0;">No device/browser info extracted yet</div>';
+  }
+  html += '</div>';
+
+  // 4. NEXT STEPS
+  html += '<div class="ctx-section"><h4>NEXT STEPS</h4>';
+  if (data.nextSteps && data.nextSteps.length > 0) {
+    for (var i = 0; i < data.nextSteps.length; i++) {
+      var step = data.nextSteps[i];
+      var iconChar = '?';
+      if (step.type === 'investigate') iconChar = '\uD83D\uDD0D';
+      else if (step.type === 'ask_info') iconChar = '\u2753';
+      else if (step.type === 'customer_action') iconChar = '\u2714';
+      else if (step.type === 'kb_article') iconChar = '\uD83D\uDCD6';
+      html += '<div class="brief-step">';
+      html += '<div class="bs-icon type-' + escapeHtml(step.type) + '">' + iconChar + '</div>';
+      html += '<div class="bs-text">';
+      if (step.url) {
+        html += '<a href="' + escapeHtml(step.url) + '" target="_blank">' + escapeHtml(step.text) + '</a>';
+      } else {
+        html += escapeHtml(step.text);
+      }
+      html += '</div></div>';
+    }
+  } else {
+    html += '<div style="font-size:12px;color:#999;padding:4px 0;">No recommended actions</div>';
+  }
+  html += '</div>';
+
+  // 5. TIMELINE
+  html += '<div class="ctx-section"><h4>TIMELINE</h4>';
+  if (data.timeline && data.timeline.length > 0) {
+    var shown = Math.min(data.timeline.length, 12);
+    for (var i = 0; i < shown; i++) {
+      var ev = data.timeline[i];
+      var evIcon = '\u25CB';
+      if (ev.type === 'order') evIcon = '\uD83D\uDCE6';
+      else if (ev.type === 'onboarding') evIcon = '\u2713';
+      else if (ev.type === 'payment') evIcon = '\uD83D\uDCB3';
+      else if (ev.type === 'mochi') evIcon = '\uD83D\uDCAC';
+      else if (ev.type === 'zendesk') evIcon = '\uD83C\uDFAB';
+      html += '<div class="timeline-event">';
+      html += '<div class="timeline-icon type-' + escapeHtml(ev.type) + '">' + evIcon + '</div>';
+      html += '<div class="timeline-info">';
+      html += '<div class="tl-label">' + escapeHtml(ev.label) + '</div>';
+      html += '<div class="tl-date">' + briefFmtDate(ev.date) + '</div>';
+      html += '</div></div>';
+    }
+    if (data.timeline.length > shown) {
+      html += '<div style="font-size:11px;color:#999;padding:4px 0;">+ ' + (data.timeline.length - shown) + ' more events</div>';
+    }
+  } else {
+    html += '<div style="font-size:12px;color:#999;padding:4px 0;">No timeline events</div>';
+  }
+  html += '</div>';
+
+  container.innerHTML = html;
+}
+
+// Enter key on search input
+document.getElementById('ctx-search-input').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') searchCustomer();
+});
+</script>
+</body>
+</html>

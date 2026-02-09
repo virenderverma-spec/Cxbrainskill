@@ -1,0 +1,19 @@
+# Serverless ignore file
+node_modules/**
+src/**
+*.md
+*.json
+!package.json
+!package-lock.json
+!openapi.json
+!serverless.yml
+tsconfig.json
+test*.js
+test*.ts
+*.ts
+!dist/**
+.env
+.git
+.gitignore
+
+

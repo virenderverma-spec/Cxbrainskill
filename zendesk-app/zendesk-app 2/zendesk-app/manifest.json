@@ -1,0 +1,26 @@
+{
+  "name": "Gather Customer Intelligence",
+  "author": {
+    "name": "Gather",
+    "email": "waqas.rasul@rockstar-automations.com"
+  },
+  "defaultLocale": "en",
+  "version": "1.0.0",
+  "frameworkVersion": "2.0",
+  "location": {
+    "support": {
+      "ticket_sidebar": {
+        "url": "assets/iframe.html",
+        "flexible": true
+      }
+    }
+  },
+  "parameters": [
+    {
+      "name": "server_url",
+      "type": "text",
+      "required": true,
+      "default": "http://localhost:3000"
+    }
+  ]
+}

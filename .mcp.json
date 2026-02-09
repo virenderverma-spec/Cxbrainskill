@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "zendesk": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "zd-mcp-server"
+      ],
+      "env": {
+        "ZENDESK_SUBDOMAIN": "rockstarautomations",
+        "ZENDESK_EMAIL": "virender.verma@rockstarautomations.com",
+        "ZENDESK_TOKEN": "c1FQnKDt1OMJ6kvskcQDe3F9QLlnpRHZsuaZv1wX"
+      }
+    }
+  }
+}

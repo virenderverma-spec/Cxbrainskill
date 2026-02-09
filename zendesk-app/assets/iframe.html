@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CS Copilot</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 13px;
+      margin: 0;
+      padding: 0;
+      background: #f8f9f9;
+      color: #2f3941;
+    }
+
+    .container {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      max-height: 100vh;
+    }
+
+    /* Header */
+    .header {
+      padding: 12px 16px;
+      background: linear-gradient(135deg, #1f73b7 0%, #144a75 100%);
+      color: white;
+    }
+
+    .header h1 {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* Main Actions */
+    .main-actions {
+      display: flex;
+      gap: 12px;
+      padding: 16px;
+      background: #fff;
+      border-bottom: 1px solid #d8dcde;
+    }
+
+    .action-btn {
+      flex: 1;
+      padding: 14px 16px;
+      font-size: 14px;
+      font-weight: 500;
+      border: 2px solid #1f73b7;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .action-btn.primary {
+      background: #1f73b7;
+      color: #fff;
+    }
+
+    .action-btn.primary:hover {
+      background: #144a75;
+      border-color: #144a75;
+    }
+
+    .action-btn.secondary {
+      background: #fff;
+      color: #1f73b7;
+    }
+
+    .action-btn.secondary:hover {
+      background: #edf7ff;
+    }
+
+    .action-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .action-btn .icon {
+      font-size: 20px;
+    }
+
+    .action-btn .label {
+      font-size: 12px;
+    }
+
+    /* Content Area */
+    .content-area {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      background: #f8f9f9;
+    }
+
+    /* Result Card */
+    .result-card {
+      background: #fff;
+      border: 1px solid #d8dcde;
+      border-radius: 8px;
+      margin-bottom: 12px;
+      overflow: hidden;
+    }
+
+    .result-card .card-header {
+      padding: 12px 16px;
+      background: #f8f9f9;
+      border-bottom: 1px solid #d8dcde;
+      font-weight: 600;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .result-card .card-body {
+      padding: 16px;
+      line-height: 1.6;
+    }
+
+    .result-card h3 {
+      margin: 12px 0 8px 0;
+      font-size: 13px;
+      color: #03363d;
+    }
+
+    .result-card h3:first-child {
+      margin-top: 0;
+    }
+
+    .result-card ul, .result-card ol {
+      margin: 8px 0;
+      padding-left: 20px;
+    }
+
+    .result-card li {
+      margin-bottom: 4px;
+    }
+
+    .result-card strong {
+      color: #03363d;
+    }
+
+    .result-card code {
+      background: #f5f5f5;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-family: monospace;
+      font-size: 12px;
+    }
+
+    .result-card pre {
+      background: #2f3941;
+      color: #fff;
+      padding: 12px;
+      border-radius: 6px;
+      overflow-x: auto;
+      margin: 12px 0;
+      font-size: 12px;
+    }
+
+    /* Copy Button */
+    .copy-btn {
+      padding: 6px 12px;
+      font-size: 11px;
+      background: #1f73b7;
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .copy-btn:hover {
+      background: #144a75;
+    }
+
+    .copy-btn.copied {
+      background: #038153;
+    }
+
+    /* Insert Button */
+    .insert-btn {
+      padding: 8px 16px;
+      font-size: 12px;
+      background: #038153;
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      margin-top: 12px;
+      width: 100%;
+      font-weight: 500;
+    }
+
+    .insert-btn:hover {
+      background: #025a3a;
+    }
+
+    /* Loading */
+    .loading {
+      display: none;
+      text-align: center;
+      padding: 40px;
+      color: #68737d;
+    }
+
+    .loading.active {
+      display: block;
+    }
+
+    .spinner {
+      display: inline-block;
+      width: 24px;
+      height: 24px;
+      border: 3px solid #d8dcde;
+      border-top-color: #1f73b7;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .loading-text {
+      margin-top: 12px;
+      font-size: 13px;
+    }
+
+    /* Empty State */
+    .empty-state {
+      text-align: center;
+      padding: 40px 20px;
+      color: #68737d;
+    }
+
+    .empty-state .icon {
+      font-size: 40px;
+      margin-bottom: 12px;
+    }
+
+    .empty-state p {
+      margin: 0;
+      font-size: 13px;
+    }
+
+    /* Status Badge */
+    .status-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      font-size: 11px;
+      border-radius: 10px;
+      font-weight: 500;
+    }
+
+    .status-badge.channel {
+      background: #edf7ff;
+      color: #1f73b7;
+    }
+
+    .status-badge.sentiment-negative {
+      background: #fff0f1;
+      color: #8c232c;
+    }
+
+    .status-badge.sentiment-neutral {
+      background: #f8f9f9;
+      color: #68737d;
+    }
+
+    .status-badge.sentiment-positive {
+      background: #edf8f4;
+      color: #038153;
+    }
+
+    /* Action Items */
+    .action-items {
+      background: #fff5e6;
+      border: 1px solid #ffb648;
+      border-radius: 6px;
+      padding: 12px;
+      margin: 12px 0;
+    }
+
+    .action-items h4 {
+      margin: 0 0 8px 0;
+      font-size: 12px;
+      color: #ad5700;
+    }
+
+    .action-items ul {
+      margin: 0;
+      padding-left: 18px;
+    }
+
+    .action-items li {
+      font-size: 12px;
+      margin-bottom: 4px;
+    }
+
+    /* Notification */
+    .notification {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #038153;
+      color: #fff;
+      padding: 10px 20px;
+      border-radius: 6px;
+      font-size: 13px;
+      animation: fadeInOut 2s ease;
+      z-index: 1000;
+    }
+
+    @keyframes fadeInOut {
+      0% { opacity: 0; transform: translateX(-50%) translateY(10px); }
+      20% { opacity: 1; transform: translateX(-50%) translateY(0); }
+      80% { opacity: 1; transform: translateX(-50%) translateY(0); }
+      100% { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <h1>🐱 CS Copilot</h1>
+    </div>
+
+    <!-- Main Actions - Only 2 Buttons -->
+    <div class="main-actions">
+      <button class="action-btn primary" id="analyze-btn" onclick="analyzeTicket()">
+        <span class="icon">🔍</span>
+        <span class="label">Analyze Ticket</span>
+      </button>
+      <button class="action-btn secondary" id="respond-btn" onclick="generateResponse()">
+        <span class="icon">✍️</span>
+        <span class="label">Generate Response</span>
+      </button>
+    </div>
+
+    <!-- Content Area -->
+    <div class="content-area">
+      <!-- Loading State -->
+      <div class="loading" id="loading">
+        <div class="spinner"></div>
+        <div class="loading-text">Analyzing ticket...</div>
+      </div>
+
+      <!-- Empty State -->
+      <div class="empty-state" id="empty-state">
+        <div class="icon">📋</div>
+        <p>Click <strong>Analyze Ticket</strong> to get context<br>or <strong>Generate Response</strong> to draft a reply</p>
+      </div>
+
+      <!-- Results Container -->
+      <div id="results-container"></div>
+    </div>
+  </div>
+
+  <!-- Zendesk Apps Framework SDK -->
+  <script src="https://static.zdassets.com/zendesk_app_framework_sdk/2.0/zaf_sdk.min.js"></script>
+
+  <!-- Main App Script -->
+  <script src="main.js"></script>
+</body>
+</html>

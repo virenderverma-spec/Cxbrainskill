@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MeowBrain</title>
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+  font-size:13px;line-height:1.5;color:#2F3941;background:#fff;
+  overflow-x:hidden;
+}
+
+/* ── Header ─────────────────────────────────────────────── */
+.app-header{
+  display:flex;align-items:center;gap:8px;
+  padding:12px 14px;border-bottom:1px solid #E9EBED;
+  background:#fff;position:sticky;top:0;z-index:10;
+}
+.app-header .logo{
+  width:24px;height:24px;background:linear-gradient(135deg,#7B1FA2,#1F73B7);
+  border-radius:5px;display:flex;align-items:center;justify-content:center;
+  color:#fff;font-size:11px;font-weight:700;
+}
+.app-header h1{font-size:14px;font-weight:600;flex:1;}
+.app-header .refresh-btn{
+  width:28px;height:28px;border:none;background:none;border-radius:4px;
+  font-size:14px;color:#68737D;cursor:pointer;
+}
+.app-header .refresh-btn:hover{background:#F0F0F0;}
+
+/* ── Loading ────────────────────────────────────────────── */
+.loading-bar{
+  height:3px;background:linear-gradient(90deg,#1F73B7,#7B1FA2,#1F73B7);
+  background-size:200%;animation:shimmer 1.5s infinite;
+  position:fixed;top:0;left:0;right:0;z-index:100;display:none;
+}
+.loading-bar.active{display:block;}
+@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+
+/* ── Skeleton ───────────────────────────────────────────── */
+.skeleton-section{margin-bottom:16px;}
+.skeleton-section .skel-title{
+  width:40%;height:10px;background:#E9EBED;border-radius:3px;margin-bottom:10px;
+}
+.skeleton-line{
+  height:12px;background:#F0F0F0;border-radius:3px;margin-bottom:6px;
+  animation:pulse 1.5s infinite;
+}
+@keyframes pulse{0%,100%{opacity:.6}50%{opacity:1}}
+
+/* ── Main content ───────────────────────────────────────── */
+.content{padding:14px;}
+
+/* ── Section ────────────────────────────────────────────── */
+.section{margin-bottom:16px;}
+.section-header{
+  font-size:10px;font-weight:700;color:#68737D;text-transform:uppercase;
+  letter-spacing:.5px;margin-bottom:8px;display:flex;align-items:center;gap:6px;
+}
+.section-header .icon{font-size:13px;}
+
+/* ── Ticket Context card ────────────────────────────────── */
+.context-card{
+  padding:10px 12px;background:#F8F9FA;border:1px solid #E9EBED;
+  border-radius:6px;font-size:12px;line-height:1.6;color:#2F3941;
+}
+
+/* ── Next Action card ───────────────────────────────────── */
+.action-card{
+  padding:12px 14px;background:#1F73B7;
+  border-radius:6px;color:#fff;
+}
+.action-label{
+  font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;
+  color:rgba(255,255,255,.7);margin-bottom:4px;
+}
+.action-text{
+  font-size:14px;font-weight:600;line-height:1.4;
+}
+
+/* ── Steps card ────────────────────────────────────────── */
+.steps-card{
+  padding:10px 12px;background:#F0F7FF;border:1px solid #C2DEFF;
+  border-radius:6px;
+}
+.action-steps{list-style:none;counter-reset:steps;}
+.action-steps li{
+  counter-increment:steps;display:flex;align-items:flex-start;gap:8px;
+  font-size:12px;color:#2F3941;padding:4px 0;line-height:1.5;
+}
+.action-steps li::before{
+  content:counter(steps);
+  min-width:20px;height:20px;border-radius:50%;
+  background:#1F73B7;color:#fff;font-size:10px;font-weight:700;
+  display:flex;align-items:center;justify-content:center;
+  margin-top:1px;
+}
+
+/* ── Follow-up card ────────────────────────────────────── */
+.followup-card{
+  display:flex;align-items:flex-start;gap:10px;
+  padding:10px 12px;background:#FFF8E1;border:1px solid #FFE082;
+  border-radius:6px;
+}
+.followup-icon{
+  width:28px;height:28px;min-width:28px;border-radius:50%;
+  background:#FFF0C2;display:flex;align-items:center;justify-content:center;
+  font-size:14px;margin-top:1px;
+}
+.followup-content{flex:1;}
+.followup-timing{
+  font-size:13px;font-weight:700;color:#E65100;line-height:1.3;
+}
+.followup-reason{
+  font-size:11px;color:#795548;line-height:1.4;margin-top:2px;
+}
+
+/* ── Action CTAs ────────────────────────────────────────── */
+.actions-grid{display:flex;flex-wrap:wrap;gap:8px;}
+.action-cta{
+  flex:1;min-width:calc(50% - 4px);padding:10px 12px;
+  border-radius:6px;border:1.5px solid #E9EBED;background:#fff;
+  cursor:pointer;transition:all .15s;text-align:left;
+}
+.action-cta:hover{border-color:#1F73B7;background:#F0F7FF;}
+.action-cta:disabled{opacity:.5;cursor:not-allowed;}
+.action-cta .cta-label{
+  font-size:12px;font-weight:700;color:#2F3941;
+  display:flex;align-items:center;gap:5px;
+}
+.action-cta .cta-label .cta-icon{font-size:14px;}
+.action-cta .cta-reason{
+  font-size:10px;color:#68737D;margin-top:3px;line-height:1.3;
+}
+.action-cta.executing{
+  border-color:#FFE082;background:#FFFBF0;pointer-events:none;
+}
+.action-cta.executing .cta-label{color:#AD5E18;}
+.action-cta.success{
+  border-color:#A5D6A7;background:#E8F5E9;pointer-events:none;
+}
+.action-cta.success .cta-label{color:#038153;}
+.action-cta.failed{
+  border-color:#F8A0A8;background:#FFF8F8;
+}
+.action-cta.failed .cta-label{color:#CC3340;}
+.action-cta.failed .cta-reason{color:#CC3340;}
+
+/* ── Confirm modal ──────────────────────────────────────── */
+.confirm-overlay{
+  position:fixed;top:0;left:0;right:0;bottom:0;
+  background:rgba(0,0,0,.4);z-index:300;
+  display:flex;align-items:center;justify-content:center;
+}
+.confirm-box{
+  background:#fff;border-radius:8px;padding:20px;
+  width:calc(100% - 32px);max-width:300px;box-shadow:0 4px 20px rgba(0,0,0,.15);
+}
+.confirm-box h3{font-size:14px;font-weight:700;color:#2F3941;margin-bottom:6px;}
+.confirm-box p{font-size:12px;color:#68737D;line-height:1.5;margin-bottom:16px;}
+.confirm-box .confirm-actions{display:flex;gap:8px;justify-content:flex-end;}
+
+/* ── Suggested Response card ────────────────────────────── */
+.response-card{
+  border:1px solid #E9EBED;border-radius:6px;overflow:hidden;
+}
+.response-textarea{
+  width:100%;min-height:140px;padding:10px 12px;border:none;
+  font-size:12px;font-family:inherit;line-height:1.6;color:#2F3941;
+  resize:vertical;background:#fff;
+}
+.response-textarea:focus{outline:none;background:#FAFFFE;}
+.response-actions{
+  display:flex;gap:6px;padding:8px 12px;background:#FAFAFA;
+  border-top:1px solid #E9EBED;
+}
+.btn{
+  padding:6px 14px;border-radius:4px;font-size:11px;font-weight:600;
+  cursor:pointer;border:none;display:flex;align-items:center;gap:4px;
+}
+.btn-secondary{background:#fff;border:1px solid #D8DCDE;color:#2F3941;}
+.btn-secondary:hover{background:#F0F0F0;}
+.btn-primary{background:#1F73B7;color:#fff;}
+.btn-primary:hover{background:#155A8A;}
+.btn .btn-icon{font-size:13px;}
+.btn:disabled{opacity:.5;cursor:not-allowed;}
+.btn-success{background:#038153;color:#fff;}
+
+/* ── Placeholder ────────────────────────────────────────── */
+.placeholder{
+  padding:16px;text-align:center;color:#999;font-size:12px;
+  background:#FAFAFA;border:1px dashed #D8DCDE;border-radius:6px;
+}
+
+/* ── Error banner ───────────────────────────────────────── */
+.error-banner{
+  padding:10px 12px;background:#FFEEF0;border:1px solid #FFCCCC;
+  border-radius:6px;color:#CC3340;font-size:12px;margin-bottom:12px;
+}
+
+/* ── Copy toast ─────────────────────────────────────────── */
+.toast{
+  position:fixed;bottom:16px;left:50%;transform:translateX(-50%);
+  padding:8px 16px;background:#2F3941;color:#fff;border-radius:6px;
+  font-size:12px;font-weight:500;z-index:200;opacity:0;
+  transition:opacity .2s;pointer-events:none;
+}
+.toast.visible{opacity:1;}
+
+/* ── Scrollbar ──────────────────────────────────────────── */
+::-webkit-scrollbar{width:5px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:#D8DCDE;border-radius:3px;}
+</style>
+</head>
+<body>
+
+<div class="loading-bar" id="loading-bar"></div>
+
+<!-- Header -->
+<div class="app-header">
+  <div class="logo">&#x1F9E0;</div>
+  <h1>MeowBrain</h1>
+  <button class="refresh-btn" onclick="refresh()" title="Refresh">&#x21BB;</button>
+</div>
+
+<!-- Main content -->
+<div class="content" id="main-content">
+  <div class="placeholder">Loading...</div>
+</div>
+
+<!-- Copy toast -->
+<div class="toast" id="toast"></div>
+
+<!-- ZAF SDK -->
+<script src="https://static.zdassets.com/zendesk_app_framework_sdk/2.0/zaf_sdk.min.js"></script>
+<script>
+// ── State ────────────────────────────────────────────────────
+var client;
+var serverUrl = '';
+var requesterEmail = '';
+var ticketId = '';
+var ticketSubject = '';
+var ticketDescription = '';
+
+// ── Initialize ZAF ──────────────────────────────────────────
+try {
+  client = ZAFClient.init();
+  client.invoke('resize', { width: '100%', height: '600px' });
+
+  client.metadata().then(function(metadata) {
+    serverUrl = (metadata.settings && metadata.settings.server_url) || 'http://localhost:3000';
+    serverUrl = serverUrl.replace(/\/+$/, '');
+  });
+
+  // Get ticket data in parallel
+  client.get(['ticket.requester.email', 'ticket.id', 'ticket.subject', 'ticket.description']).then(function(data) {
+    requesterEmail = data['ticket.requester.email'] || '';
+    ticketId = data['ticket.id'] || '';
+    ticketSubject = data['ticket.subject'] || '';
+    ticketDescription = data['ticket.description'] || '';
+
+    if (requesterEmail) {
+      loadTicketAssist();
+    } else {
+      showMessage('No requester email found on this ticket.');
+    }
+  }).catch(function() {
+    showMessage('Could not read ticket data. Is this running inside Zendesk?');
+  });
+
+  client.on('ticket.requester.email.changed', function(email) {
+    if (email && email !== requesterEmail) {
+      requesterEmail = email;
+      loadTicketAssist();
+    }
+  });
+} catch (e) {
+  // Dev mode — not inside Zendesk
+  serverUrl = 'http://localhost:3000';
+  showDevMode();
+}
+
+// ── Dev mode ─────────────────────────────────────────────────
+function showDevMode() {
+  document.getElementById('main-content').innerHTML =
+    '<div class="placeholder">' +
+    'Not running inside Zendesk. Enter an email to test:<br><br>' +
+    '<input type="text" id="dev-email" placeholder="customer@email.com" style="width:100%;padding:8px 10px;border:1px solid #D8DCDE;border-radius:4px;font-size:12px;margin-bottom:8px;">' +
+    '<input type="text" id="dev-ticket-id" placeholder="Ticket ID (optional)" style="width:100%;padding:8px 10px;border:1px solid #D8DCDE;border-radius:4px;font-size:12px;margin-bottom:8px;">' +
+    '<input type="text" id="dev-subject" placeholder="Ticket subject (optional)" style="width:100%;padding:8px 10px;border:1px solid #D8DCDE;border-radius:4px;font-size:12px;margin-bottom:8px;">' +
+    '<button onclick="devLookup()" style="width:100%;padding:8px 14px;background:#1F73B7;color:#fff;border:none;border-radius:4px;font-size:12px;font-weight:600;cursor:pointer;">Activate MeowBrain</button>' +
+    '</div>';
+}
+
+function devLookup() {
+  var emailInput = document.getElementById('dev-email');
+  if (emailInput && emailInput.value.trim()) {
+    requesterEmail = emailInput.value.trim();
+    ticketId = (document.getElementById('dev-ticket-id') || {}).value || '';
+    ticketSubject = (document.getElementById('dev-subject') || {}).value || '';
+    ticketDescription = '';
+    loadTicketAssist();
+  }
+}
+
+// ── UI Helpers ──────────────────────────────────────────────
+function showLoading(show) {
+  document.getElementById('loading-bar').className = 'loading-bar' + (show ? ' active' : '');
+}
+
+function showMessage(msg) {
+  document.getElementById('main-content').innerHTML = '<div class="placeholder">' + escapeHtml(msg) + '</div>';
+}
+
+function escapeHtml(text) {
+  var div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+function showSkeletons() {
+  var html = '';
+  for (var i = 0; i < 3; i++) {
+    html += '<div class="skeleton-section">';
+    html += '<div class="skel-title"></div>';
+    html += '<div class="skeleton-line" style="width:' + (70 + Math.random() * 25) + '%"></div>';
+    html += '<div class="skeleton-line" style="width:' + (50 + Math.random() * 40) + '%"></div>';
+    html += '<div class="skeleton-line" style="width:' + (60 + Math.random() * 30) + '%"></div>';
+    html += '</div>';
+  }
+  document.getElementById('main-content').innerHTML = html;
+}
+
+function showToast(msg) {
+  var toast = document.getElementById('toast');
+  toast.textContent = msg;
+  toast.classList.add('visible');
+  setTimeout(function() { toast.classList.remove('visible'); }, 2000);
+}
+
+// ── Load Ticket Assist ──────────────────────────────────────
+async function loadTicketAssist() {
+  showLoading(true);
+  showSkeletons();
+
+  try {
+    var resp = await fetch(serverUrl + '/api/customer/ticket-assist', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: requesterEmail,
+        ticketId: ticketId,
+        ticketSubject: ticketSubject,
+        ticketDescription: ticketDescription,
+      }),
+    });
+
+    if (!resp.ok) {
+      var errData = await resp.json().catch(function() { return { error: 'Server error' }; });
+      document.getElementById('main-content').innerHTML =
+        '<div class="error-banner">Error: ' + escapeHtml(errData.error || 'Request failed') + '</div>';
+      return;
+    }
+
+    var data = await resp.json();
+    renderCopilot(data);
+  } catch (err) {
+    document.getElementById('main-content').innerHTML =
+      '<div class="error-banner">Failed to connect to server at ' + escapeHtml(serverUrl) + '</div>';
+  } finally {
+    showLoading(false);
+  }
+}
+
+function refresh() {
+  if (requesterEmail) {
+    loadTicketAssist();
+  }
+}
+
+// ── Render Copilot ──────────────────────────────────────────
+function renderCopilot(data) {
+  var html = '';
+
+  // 1. TICKET CONTEXT
+  html += '<div class="section">';
+  html += '<div class="section-header"><span class="icon">&#x1F4CB;</span> TICKET CONTEXT</div>';
+  html += '<div class="context-card">' + escapeHtml(data.ticketContext || 'No context available.') + '</div>';
+  html += '</div>';
+
+  // 2. NEXT ACTION (prominent standalone card)
+  html += '<div class="section">';
+  html += '<div class="section-header"><span class="icon">&#x25B6;</span> NEXT ACTION</div>';
+  var actionText = typeof data.nextAction === 'string' ? data.nextAction : (data.nextAction && data.nextAction.summary || '');
+  if (actionText) {
+    html += '<div class="action-card">';
+    html += '<div class="action-label">Do this now</div>';
+    html += '<div class="action-text">' + escapeHtml(actionText) + '</div>';
+    html += '</div>';
+  } else {
+    html += '<div style="padding:8px;color:#68737D;font-size:12px;">No action recommended.</div>';
+  }
+  html += '</div>';
+
+  // 3. HOW-TO STEPS
+  var steps = data.steps || (data.nextAction && data.nextAction.steps) || [];
+  if (steps.length > 0) {
+    html += '<div class="section">';
+    html += '<div class="section-header"><span class="icon">&#x1F4DD;</span> HOW TO</div>';
+    html += '<div class="steps-card">';
+    html += '<ol class="action-steps">';
+    for (var i = 0; i < steps.length; i++) {
+      html += '<li><span>' + escapeHtml(steps[i]) + '</span></li>';
+    }
+    html += '</ol>';
+    html += '</div>';
+    html += '</div>';
+  }
+
+  // 4. CONNECTX ACTIONS (CTAs)
+  window._copilotActions = data.actions || [];
+  if (data.actions && data.actions.length > 0) {
+    html += '<div class="section">';
+    html += '<div class="section-header"><span class="icon">&#x26A1;</span> QUICK ACTIONS</div>';
+    html += '<div class="actions-grid">';
+    var actionIcons = { sim_swap: '&#x1F504;', suspend: '&#x1F6D1;', resume: '&#x25B6;', cancel_order: '&#x274C;' };
+    for (var ai = 0; ai < data.actions.length; ai++) {
+      var act = data.actions[ai];
+      var icon = actionIcons[act.type] || '&#x2699;';
+      html += '<button class="action-cta" id="action-' + ai + '" onclick="confirmAction(' + ai + ')">';
+      html += '<div class="cta-label"><span class="cta-icon">' + icon + '</span> ' + escapeHtml(act.label || act.type) + '</div>';
+      html += '<div class="cta-reason">' + escapeHtml(act.reason || '') + '</div>';
+      html += '</button>';
+    }
+    html += '</div>';
+    html += '</div>';
+  }
+
+  // 5. FOLLOW-UP REMINDER
+  if (data.followUp) {
+    html += '<div class="section">';
+    html += '<div class="section-header"><span class="icon">&#x23F0;</span> NEXT FOLLOW-UP</div>';
+    html += '<div class="followup-card">';
+    html += '<div class="followup-icon">&#x1F514;</div>';
+    html += '<div class="followup-content">';
+    html += '<div class="followup-timing">Follow up in ' + escapeHtml(data.followUp.timing || '24 hours') + '</div>';
+    html += '<div class="followup-reason">' + escapeHtml(data.followUp.reason || 'Confirm issue is resolved') + '</div>';
+    html += '</div>';
+    html += '</div>';
+    html += '</div>';
+  }
+
+  // 3. SUGGESTED RESPONSE
+  html += '<div class="section">';
+  html += '<div class="section-header"><span class="icon">&#x1F4AC;</span> SUGGESTED RESPONSE</div>';
+  html += '<div class="response-card">';
+  html += '<textarea class="response-textarea" id="suggested-response">' + escapeHtml(data.suggestedResponse || '') + '</textarea>';
+  html += '<div class="response-actions">';
+  html += '<button class="btn btn-secondary" onclick="copyResponse()" id="copy-btn"><span class="btn-icon">&#x1F4CB;</span> Copy</button>';
+  html += '<button class="btn btn-primary" onclick="insertReply()" id="insert-btn"><span class="btn-icon">&#x2709;</span> Insert Reply</button>';
+  html += '</div>';
+  html += '</div>';
+  html += '</div>';
+
+  document.getElementById('main-content').innerHTML = html;
+}
+
+// ── Response Actions ────────────────────────────────────────
+function copyResponse() {
+  var textarea = document.getElementById('suggested-response');
+  if (!textarea) return;
+
+  var text = textarea.value;
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(text).then(function() {
+      showToast('Copied to clipboard');
+    }).catch(function() {
+      fallbackCopy(text);
+    });
+  } else {
+    fallbackCopy(text);
+  }
+}
+
+function fallbackCopy(text) {
+  var ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.select();
+  document.execCommand('copy');
+  document.body.removeChild(ta);
+  showToast('Copied to clipboard');
+}
+
+function insertReply() {
+  var textarea = document.getElementById('suggested-response');
+  if (!textarea) return;
+  var text = textarea.value;
+
+  if (client) {
+    client.invoke('ticket.editor.insert', text).then(function() {
+      var btn = document.getElementById('insert-btn');
+      btn.innerHTML = '<span class="btn-icon">&#x2713;</span> Inserted';
+      btn.className = 'btn btn-success';
+      btn.disabled = true;
+      setTimeout(function() {
+        btn.innerHTML = '<span class="btn-icon">&#x2709;</span> Insert Reply';
+        btn.className = 'btn btn-primary';
+        btn.disabled = false;
+      }, 3000);
+    }).catch(function() {
+      showToast('Could not insert — try copying instead');
+    });
+  } else {
+    showToast('Insert requires Zendesk. Use Copy instead.');
+  }
+}
+
+// ── ConnectX Action CTAs ────────────────────────────────────
+window._copilotActions = [];
+
+function confirmAction(idx) {
+  var action = window._copilotActions[idx];
+  if (!action) return;
+
+  var overlay = document.createElement('div');
+  overlay.className = 'confirm-overlay';
+  overlay.id = 'confirm-overlay';
+  overlay.innerHTML =
+    '<div class="confirm-box">' +
+    '<h3>Confirm: ' + escapeHtml(action.label || action.type) + '</h3>' +
+    '<p>' + escapeHtml(action.reason || 'Execute this action via ConnectX?') + '</p>' +
+    '<div class="confirm-actions">' +
+    '<button class="btn btn-secondary" onclick="dismissConfirm()">Cancel</button>' +
+    '<button class="btn btn-primary" onclick="executeAction(' + idx + ')">Execute</button>' +
+    '</div>' +
+    '</div>';
+  document.body.appendChild(overlay);
+}
+
+function dismissConfirm() {
+  var overlay = document.getElementById('confirm-overlay');
+  if (overlay) overlay.remove();
+}
+
+async function executeAction(idx) {
+  dismissConfirm();
+  var action = window._copilotActions[idx];
+  if (!action) return;
+
+  var btn = document.getElementById('action-' + idx);
+  if (!btn) return;
+
+  // Show executing state
+  btn.className = 'action-cta executing';
+  btn.querySelector('.cta-label').innerHTML = '&#x23F3; Executing ' + escapeHtml(action.label || '') + '...';
+  btn.disabled = true;
+
+  try {
+    var resp = await fetch(serverUrl + '/api/customer/action', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: action.type,
+        params: action.params || {},
+        ticketId: ticketId,
+        email: requesterEmail,
+      }),
+    });
+
+    var data = await resp.json();
+
+    if (data.success) {
+      btn.className = 'action-cta success';
+      btn.querySelector('.cta-label').innerHTML = '&#x2705; ' + escapeHtml(data.label || action.label) + ' — Done';
+      btn.querySelector('.cta-reason').textContent = data.message || 'Completed successfully';
+      showToast(data.label + ' completed successfully');
+
+      // Add internal note to Zendesk ticket
+      addZendeskNote(action, data);
+    } else {
+      btn.className = 'action-cta failed';
+      btn.querySelector('.cta-label').innerHTML = '&#x274C; ' + escapeHtml(action.label) + ' — Failed';
+      btn.querySelector('.cta-reason').textContent = data.error || 'Action failed';
+      btn.disabled = false;
+      btn.onclick = function() { confirmAction(idx); };
+      showToast('Action failed: ' + (data.error || 'Unknown error'));
+    }
+  } catch (err) {
+    btn.className = 'action-cta failed';
+    btn.querySelector('.cta-label').innerHTML = '&#x274C; ' + escapeHtml(action.label) + ' — Error';
+    btn.querySelector('.cta-reason').textContent = err.message;
+    btn.disabled = false;
+    btn.onclick = function() { confirmAction(idx); };
+    showToast('Connection error');
+  }
+}
+
+function addZendeskNote(action, result) {
+  if (!client || !ticketId) return;
+
+  var note = '[MeowBrain] Action executed: ' + (action.label || action.type) +
+    '\nType: ' + action.type +
+    '\nResult: ' + (result.message || 'Success') +
+    '\nExecuted by agent via MeowBrain sidebar';
+
+  client.request({
+    url: '/api/v2/tickets/' + ticketId + '.json',
+    type: 'PUT',
+    contentType: 'application/json',
+    data: JSON.stringify({
+      ticket: {
+        comment: {
+          body: note,
+          public: false
+        }
+      }
+    })
+  }).catch(function() {
+    // Silent fail for note — action already succeeded
+  });
+}
+</script>
+</body>
+</html>

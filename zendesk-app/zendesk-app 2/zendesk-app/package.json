@@ -1,0 +1,22 @@
+{
+  "name": "zendesk-customer-intelligence",
+  "version": "1.0.0",
+  "description": "Zendesk Agent Workspace with Claude-powered Customer Intelligence",
+  "main": "server/server.js",
+  "scripts": {
+    "start": "node server/server.js",
+    "dev": "node server/server.js",
+    "legacy": "node server.js",
+    "zcli": "zcli apps:server"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "axios": "^1.7.9",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2"
+  },
+  "devDependencies": {
+    "@zendesk/zcli": "1.0.0-beta.55"
+  }
+}

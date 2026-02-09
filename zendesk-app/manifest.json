@@ -1,0 +1,27 @@
+{
+  "name": "CS Copilot",
+  "author": {
+    "name": "Meow Mobile",
+    "email": "support@meowmobile.com"
+  },
+  "defaultLocale": "en",
+  "private": true,
+  "location": {
+    "support": {
+      "ticket_sidebar": {
+        "url": "assets/iframe.html",
+        "flexible": true
+      }
+    }
+  },
+  "version": "1.0.0",
+  "frameworkVersion": "2.0",
+  "parameters": [
+    {
+      "name": "serverUrl",
+      "type": "text",
+      "required": true,
+      "default": "http://localhost:3000"
+    }
+  ]
+}

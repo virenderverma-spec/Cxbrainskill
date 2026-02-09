@@ -1,0 +1,12 @@
+{
+  "app": {
+    "name": "Gather Customer Intelligence",
+    "short_description": "Customer profile and AI-powered support tools",
+    "long_description": "Auto-loads customer profile, order history, onboarding funnel, and Mochi chat history when a ticket opens. Includes AI chat for follow-up queries.",
+    "installation_instructions": "Set the server_url to your backend server address (e.g. https://your-server.com or http://localhost:3000 for local dev)."
+  },
+  "server_url": {
+    "label": "Server URL",
+    "helpText": "The URL of the backend server (e.g. http://localhost:3000)"
+  }
+}
