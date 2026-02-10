@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SLA Dashboard — Meow Mobile</title>
+<style>
+  :root {
+    --bg: #f5f7fa;
+    --card-bg: #fff;
+    --text: #2f3941;
+    --text-muted: #68737d;
+    --border: #d8dcde;
+    --green: #038153;
+    --green-bg: #edf8f4;
+    --amber: #ad5e00;
+    --amber-bg: #fff6e5;
+    --red: #cc3340;
+    --red-bg: #fff0f1;
+    --red-dark: #8c232c;
+    --red-dark-bg: #fce4e6;
+    --blue: #1f73b7;
+    --blue-bg: #edf7ff;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.5;
+  }
+
+  .header {
+    background: linear-gradient(135deg, #1f73b7 0%, #0d4f8b 100%);
+    color: #fff;
+    padding: 20px 32px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .header h1 { font-size: 22px; font-weight: 600; }
+  .header-right { display: flex; align-items: center; gap: 16px; font-size: 13px; }
+  .header-right label { cursor: pointer; display: flex; align-items: center; gap: 6px; }
+  .refresh-time { opacity: 0.8; }
+
+  .container { max-width: 1400px; margin: 0 auto; padding: 24px 32px; }
+
+  /* Summary Cards */
+  .summary-row {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+  .card {
+    background: var(--card-bg);
+    border-radius: 8px;
+    padding: 20px;
+    border: 1px solid var(--border);
+    position: relative;
+    overflow: hidden;
+  }
+  .card-label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); margin-bottom: 4px; }
+  .card-value { font-size: 32px; font-weight: 700; }
+  .card-pct { font-size: 13px; color: var(--text-muted); margin-top: 2px; }
+  .card::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 4px;
+  }
+  .card-total::after { background: var(--blue); }
+  .card-breached::after { background: var(--red-dark); }
+  .card-breached .card-value { color: var(--red-dark); }
+  .card-critical::after { background: var(--red); }
+  .card-critical .card-value { color: var(--red); }
+  .card-warning::after { background: var(--amber); }
+  .card-warning .card-value { color: var(--amber); }
+  .card-healthy::after { background: var(--green); }
+  .card-healthy .card-value { color: var(--green); }
+
+  /* Sections */
+  .section { margin-bottom: 24px; }
+  .section-title {
+    font-size: 15px;
+    font-weight: 600;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .section-title .badge {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-weight: 500;
+  }
+
+  /* Two-column panels */
+  .split-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+  .panel {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px;
+  }
+  .panel-title { font-size: 14px; font-weight: 600; margin-bottom: 14px; }
+
+  /* Stacked bar */
+  .stacked-bar {
+    display: flex;
+    height: 28px;
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 8px;
+  }
+  .stacked-bar div { transition: width 0.4s ease; }
+  .bar-breached { background: var(--red-dark); }
+  .bar-critical { background: var(--red); }
+  .bar-warning { background: var(--amber); }
+  .bar-healthy { background: var(--green); }
+
+  .bar-legend {
+    display: flex;
+    gap: 16px;
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+  .bar-legend span { display: flex; align-items: center; gap: 4px; }
+  .legend-dot {
+    width: 10px; height: 10px; border-radius: 2px; display: inline-block;
+  }
+
+  /* Breakdown tables */
+  .breakdown-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  .breakdown-table th {
+    text-align: left;
+    padding: 8px 12px;
+    border-bottom: 2px solid var(--border);
+    font-weight: 600;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    color: var(--text-muted);
+  }
+  .breakdown-table td {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .breakdown-table tr:last-child td { border-bottom: none; }
+  .breakdown-table tr:hover { background: #f8f9fa; }
+
+  .inline-bar {
+    display: flex;
+    height: 8px;
+    border-radius: 4px;
+    overflow: hidden;
+    min-width: 120px;
+  }
+
+  /* Ticket tables */
+  .ticket-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  .ticket-table th {
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 2px solid var(--border);
+    font-weight: 600;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
+  .ticket-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  .ticket-table tr:hover { background: #f8f9fa; }
+
+  .ticket-link {
+    color: var(--blue);
+    text-decoration: none;
+    font-weight: 500;
+  }
+  .ticket-link:hover { text-decoration: underline; }
+
+  .subject-cell {
+    max-width: 320px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .status-pill {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+  }
+  .pill-breached { background: var(--red-dark-bg); color: var(--red-dark); }
+  .pill-critical { background: var(--red-bg); color: var(--red); }
+  .pill-warning  { background: var(--amber-bg); color: var(--amber); }
+  .pill-healthy  { background: var(--green-bg); color: var(--green); }
+
+  .priority-pill {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 500;
+  }
+  .pri-urgent { background: #fce4e6; color: var(--red-dark); }
+  .pri-high   { background: #fff0f1; color: var(--red); }
+  .pri-normal { background: var(--blue-bg); color: var(--blue); }
+  .pri-low    { background: #f8f9fa; color: var(--text-muted); }
+
+  .time-overdue { color: var(--red-dark); font-weight: 600; }
+  .time-ok { color: var(--text-muted); }
+
+  /* Loading / Error */
+  .loading {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 400px;
+    font-size: 16px;
+    color: var(--text-muted);
+  }
+  .spinner {
+    width: 32px; height: 32px;
+    border: 3px solid var(--border);
+    border-top-color: var(--blue);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin-right: 12px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .error-box {
+    background: var(--red-bg);
+    color: var(--red-dark);
+    padding: 16px 20px;
+    border-radius: 8px;
+    border: 1px solid #f5c6cb;
+    margin: 24px 0;
+  }
+
+  .empty-state {
+    text-align: center;
+    padding: 32px;
+    color: var(--text-muted);
+    font-size: 14px;
+  }
+
+  /* Responsive */
+  @media (max-width: 900px) {
+    .summary-row { grid-template-columns: repeat(3, 1fr); }
+    .split-row { grid-template-columns: 1fr; }
+    .container { padding: 16px; }
+  }
+  @media (max-width: 600px) {
+    .summary-row { grid-template-columns: repeat(2, 1fr); }
+    .header { padding: 16px; }
+    .header h1 { font-size: 18px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>SLA Dashboard — Meow Mobile</h1>
+  <div class="header-right">
+    <span class="refresh-time" id="refresh-time">Loading...</span>
+    <label>
+      <input type="checkbox" id="auto-refresh" checked>
+      Auto-refresh (60s)
+    </label>
+    <button onclick="loadDashboard()" style="background:#fff;color:#1f73b7;border:none;padding:6px 14px;border-radius:4px;cursor:pointer;font-weight:500;font-size:13px">Refresh Now</button>
+  </div>
+</div>
+
+<div class="container" id="dashboard">
+  <div class="loading"><div class="spinner"></div> Loading SLA data...</div>
+</div>
+
+<script>
+const ZENDESK_URL = 'https://rockstarautomations1766495393.zendesk.com/agent/tickets';
+let refreshTimer = null;
+
+function formatDuration(minutes) {
+  if (minutes == null) return '-';
+  if (minutes < 60) return minutes + 'm';
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  if (h < 24) return h + 'h ' + (m > 0 ? m + 'm' : '');
+  const d = Math.floor(h / 24);
+  const rh = h % 24;
+  return d + 'd ' + (rh > 0 ? rh + 'h' : '');
+}
+
+function pct(n, total) {
+  if (!total) return '0';
+  return Math.round((n / total) * 100);
+}
+
+function pillClass(status) {
+  return 'pill-' + status;
+}
+
+function priClass(pri) {
+  return 'pri-' + (pri || 'normal');
+}
+
+function stackedBar(data, total) {
+  if (!total) return '<div class="stacked-bar"><div class="bar-healthy" style="width:100%"></div></div>';
+  const b = pct(data.breached, total);
+  const c = pct(data.critical, total);
+  const w = pct(data.warning, total);
+  const h = 100 - b - c - w;
+  return `<div class="stacked-bar">
+    <div class="bar-breached" style="width:${b}%"></div>
+    <div class="bar-critical" style="width:${c}%"></div>
+    <div class="bar-warning" style="width:${w}%"></div>
+    <div class="bar-healthy" style="width:${Math.max(h, 0)}%"></div>
+  </div>`;
+}
+
+function inlineBar(data, total) {
+  if (!total) return '<div class="inline-bar"><div class="bar-healthy" style="width:100%"></div></div>';
+  const b = pct(data.breached, total);
+  const c = pct(data.critical, total);
+  const w = pct(data.warning, total);
+  const h = 100 - b - c - w;
+  return `<div class="inline-bar">
+    <div class="bar-breached" style="width:${b}%"></div>
+    <div class="bar-critical" style="width:${c}%"></div>
+    <div class="bar-warning" style="width:${w}%"></div>
+    <div class="bar-healthy" style="width:${Math.max(h, 0)}%"></div>
+  </div>`;
+}
+
+function legend() {
+  return `<div class="bar-legend">
+    <span><span class="legend-dot" style="background:var(--red-dark)"></span> Breached</span>
+    <span><span class="legend-dot" style="background:var(--red)"></span> Critical (&gt;85%)</span>
+    <span><span class="legend-dot" style="background:var(--amber)"></span> Warning (60-85%)</span>
+    <span><span class="legend-dot" style="background:var(--green)"></span> Healthy (&lt;60%)</span>
+  </div>`;
+}
+
+function ticketRow(t) {
+  const frOverdue = !t.firstResponse.replied && t.firstResponse.elapsedMin > t.firstResponse.targetMin;
+  const resOverdue = t.resolution.elapsedMin > t.resolution.targetMin;
+  const overdueMin = Math.max(
+    frOverdue ? t.firstResponse.elapsedMin - t.firstResponse.targetMin : 0,
+    resOverdue ? t.resolution.elapsedMin - t.resolution.targetMin : 0
+  );
+  const breachedMetrics = [];
+  if (t.firstResponse.status === 'breached' || t.firstResponse.status === 'critical') breachedMetrics.push('1st Resp');
+  if (t.resolution.status === 'breached' || t.resolution.status === 'critical') breachedMetrics.push('Resolution');
+
+  return `<tr>
+    <td><a class="ticket-link" href="${ZENDESK_URL}/${t.ticketId}" target="_blank">#${t.ticketId}</a></td>
+    <td class="subject-cell" title="${(t.subject || '').replace(/"/g, '&quot;')}">${t.subject || '-'}</td>
+    <td><span class="priority-pill ${priClass(t.priority)}">${(t.priority || 'normal').toUpperCase()}</span></td>
+    <td>${t.tier}</td>
+    <td><span class="status-pill ${pillClass(t.overallStatus)}">${t.overallStatus.toUpperCase()}</span></td>
+    <td>${breachedMetrics.join(', ') || '-'}</td>
+    <td class="${overdueMin > 0 ? 'time-overdue' : 'time-ok'}">${overdueMin > 0 ? '+' + formatDuration(overdueMin) + ' over' : formatDuration(t.ageMinutes) + ' old'}</td>
+  </tr>`;
+}
+
+function renderDashboard(data) {
+  const s = data.summary;
+  const el = document.getElementById('dashboard');
+
+  let html = '';
+
+  // Summary Cards
+  html += `<div class="summary-row">
+    <div class="card card-total">
+      <div class="card-label">Total Active</div>
+      <div class="card-value">${s.total}</div>
+      <div class="card-pct">across all tiers</div>
+    </div>
+    <div class="card card-breached">
+      <div class="card-label">Breached</div>
+      <div class="card-value">${s.breached}</div>
+      <div class="card-pct">${pct(s.breached, s.total)}% of active</div>
+    </div>
+    <div class="card card-critical">
+      <div class="card-label">Critical (&gt;85%)</div>
+      <div class="card-value">${s.critical}</div>
+      <div class="card-pct">${pct(s.critical, s.total)}% of active</div>
+    </div>
+    <div class="card card-warning">
+      <div class="card-label">Warning (60-85%)</div>
+      <div class="card-value">${s.warning}</div>
+      <div class="card-pct">${pct(s.warning, s.total)}% of active</div>
+    </div>
+    <div class="card card-healthy">
+      <div class="card-label">Healthy (&lt;60%)</div>
+      <div class="card-value">${s.healthy}</div>
+      <div class="card-pct">${pct(s.healthy, s.total)}% of active</div>
+    </div>
+  </div>`;
+
+  // First Response vs Resolution split
+  html += `<div class="split-row">
+    <div class="panel">
+      <div class="panel-title">First Response SLA</div>
+      ${stackedBar(data.byMetric.firstResponse, s.total)}
+      ${legend()}
+      <div style="margin-top:12px;font-size:12px;color:var(--text-muted)">
+        ${data.byMetric.firstResponse.breached} breached &middot;
+        ${data.byMetric.firstResponse.critical} critical &middot;
+        ${data.byMetric.firstResponse.warning} warning &middot;
+        ${data.byMetric.firstResponse.healthy} healthy
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">Resolution SLA</div>
+      ${stackedBar(data.byMetric.resolution, s.total)}
+      ${legend()}
+      <div style="margin-top:12px;font-size:12px;color:var(--text-muted)">
+        ${data.byMetric.resolution.breached} breached &middot;
+        ${data.byMetric.resolution.critical} critical &middot;
+        ${data.byMetric.resolution.warning} warning &middot;
+        ${data.byMetric.resolution.healthy} healthy
+      </div>
+    </div>
+  </div>`;
+
+  // By Priority + By Tier side by side
+  const priorities = ['urgent', 'high', 'normal', 'low'];
+  const tiers = Object.keys(data.byTier).sort();
+
+  html += `<div class="split-row">
+    <div class="panel">
+      <div class="panel-title">By Priority</div>
+      <table class="breakdown-table">
+        <thead><tr><th>Priority</th><th>Total</th><th>Breached</th><th>Critical</th><th>Warn</th><th>Health</th><th style="min-width:120px">Distribution</th></tr></thead>
+        <tbody>`;
+  for (const p of priorities) {
+    const d = data.byPriority[p];
+    if (!d) continue;
+    html += `<tr>
+      <td><span class="priority-pill ${priClass(p)}">${p.toUpperCase()}</span></td>
+      <td><strong>${d.total}</strong></td>
+      <td style="color:var(--red-dark)">${d.breached || 0}</td>
+      <td style="color:var(--red)">${d.critical || 0}</td>
+      <td style="color:var(--amber)">${d.warning || 0}</td>
+      <td style="color:var(--green)">${d.healthy || 0}</td>
+      <td>${inlineBar(d, d.total)}</td>
+    </tr>`;
+  }
+  html += `</tbody></table></div>
+    <div class="panel">
+      <div class="panel-title">By Tier</div>
+      <table class="breakdown-table">
+        <thead><tr><th>Tier</th><th>Total</th><th>Breached</th><th>Critical</th><th>Warn</th><th>Health</th><th style="min-width:120px">Distribution</th></tr></thead>
+        <tbody>`;
+  for (const t of tiers) {
+    const d = data.byTier[t];
+    html += `<tr>
+      <td><strong>${t}</strong></td>
+      <td><strong>${d.total}</strong></td>
+      <td style="color:var(--red-dark)">${d.breached || 0}</td>
+      <td style="color:var(--red)">${d.critical || 0}</td>
+      <td style="color:var(--amber)">${d.warning || 0}</td>
+      <td style="color:var(--green)">${d.healthy || 0}</td>
+      <td>${inlineBar(d, d.total)}</td>
+    </tr>`;
+  }
+  html += `</tbody></table></div></div>`;
+
+  // Needs Immediate Action
+  html += `<div class="section">
+    <div class="section-title">Needs Immediate Action <span class="badge" style="background:var(--red-dark-bg);color:var(--red-dark)">${data.needsAction.length} tickets</span></div>`;
+  if (data.needsAction.length > 0) {
+    html += `<div class="panel" style="padding:0;overflow:auto">
+      <table class="ticket-table">
+        <thead><tr><th>Ticket</th><th>Subject</th><th>Priority</th><th>Tier</th><th>SLA Status</th><th>Metric</th><th>Overdue</th></tr></thead>
+        <tbody>${data.needsAction.map(ticketRow).join('')}</tbody>
+      </table>
+    </div>`;
+  } else {
+    html += `<div class="panel empty-state">No breached or critical tickets right now.</div>`;
+  }
+  html += `</div>`;
+
+  // At Risk
+  html += `<div class="section">
+    <div class="section-title">At Risk <span class="badge" style="background:var(--amber-bg);color:var(--amber)">${data.atRisk.length} tickets</span></div>`;
+  if (data.atRisk.length > 0) {
+    html += `<div class="panel" style="padding:0;overflow:auto">
+      <table class="ticket-table">
+        <thead><tr><th>Ticket</th><th>Subject</th><th>Priority</th><th>Tier</th><th>SLA Status</th><th>Metric</th><th>Time</th></tr></thead>
+        <tbody>${data.atRisk.map(ticketRow).join('')}</tbody>
+      </table>
+    </div>`;
+  } else {
+    html += `<div class="panel empty-state">No at-risk tickets right now.</div>`;
+  }
+  html += `</div>`;
+
+  // All Tickets (collapsible)
+  html += `<div class="section">
+    <div class="section-title" style="cursor:pointer" onclick="document.getElementById('all-tickets').style.display = document.getElementById('all-tickets').style.display === 'none' ? 'block' : 'none'">
+      All Active Tickets <span class="badge" style="background:var(--blue-bg);color:var(--blue)">${data.allTickets.length} tickets</span>
+      <span style="font-size:12px;color:var(--text-muted);margin-left:4px">(click to toggle)</span>
+    </div>
+    <div id="all-tickets" style="display:none">
+      <div class="panel" style="padding:0;overflow:auto">
+        <table class="ticket-table">
+          <thead><tr><th>Ticket</th><th>Subject</th><th>Priority</th><th>Tier</th><th>SLA Status</th><th>Metric</th><th>Age</th></tr></thead>
+          <tbody>${data.allTickets.map(ticketRow).join('')}</tbody>
+        </table>
+      </div>
+    </div>
+  </div>`;
+
+  el.innerHTML = html;
+}
+
+async function loadDashboard() {
+  try {
+    document.getElementById('refresh-time').textContent = 'Refreshing...';
+    const resp = await fetch('/api/sla/dashboard');
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ error: resp.statusText }));
+      throw new Error(err.details || err.error || resp.statusText);
+    }
+    const data = await resp.json();
+    renderDashboard(data);
+    const ts = new Date(data.generatedAt);
+    document.getElementById('refresh-time').textContent = 'Last updated: ' + ts.toLocaleTimeString();
+  } catch (err) {
+    document.getElementById('dashboard').innerHTML =
+      `<div class="error-box"><strong>Error loading dashboard:</strong> ${err.message}</div>`;
+    document.getElementById('refresh-time').textContent = 'Error';
+  }
+}
+
+function setupAutoRefresh() {
+  const cb = document.getElementById('auto-refresh');
+  function toggle() {
+    if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
+    if (cb.checked) {
+      refreshTimer = setInterval(loadDashboard, 60000);
+    }
+  }
+  cb.addEventListener('change', toggle);
+  toggle();
+}
+
+loadDashboard();
+setupAutoRefresh();
+</script>
+</body>
+</html>

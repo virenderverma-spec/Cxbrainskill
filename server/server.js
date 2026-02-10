@@ -8,8 +8,10 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
 const chatRouter = require('./routes/chat');
 const reactiveRouter = require('./routes/reactive');
+const slaDashboardRouter = require('./routes/sla-dashboard');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -24,9 +26,13 @@ app.use((req, res, next) => {
   next();
 });
 
+// Static files (SLA dashboard HTML)
+app.use(express.static(path.join(__dirname, 'public')));
+
 // Routes
 app.use('/api/chat', chatRouter);
 app.use('/api/reactive', reactiveRouter);
+app.use('/api/sla', slaDashboardRouter);
 
 // Health check
 app.get('/health', (req, res) => {

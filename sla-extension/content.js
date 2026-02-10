@@ -23,19 +23,19 @@
   };
 
   var SLA_TARGETS = {
-    // L0: 1 hour first response across all priorities
+    // L0: 30m first response for urgent/high, 60m for normal/low
     L0: {
-      urgent: { firstResponse: 60, nextResponse: 240,  resolution: 480 },
-      high:   { firstResponse: 60, nextResponse: 480,  resolution: 1440 },
-      normal: { firstResponse: 60, nextResponse: 720,  resolution: 2880 },
-      low:    { firstResponse: 60, nextResponse: 1440, resolution: 4320 }
+      urgent: { firstResponse: 30, nextResponse: 240,  resolution: 60 },
+      high:   { firstResponse: 30, nextResponse: 480,  resolution: 60 },
+      normal: { firstResponse: 60, nextResponse: 720,  resolution: 120 },
+      low:    { firstResponse: 60, nextResponse: 1440, resolution: 120 }
     },
-    // L1-3: 2 hour first response across all priorities
+    // L1-3: 60m first response, 4h resolution across all priorities
     L1: {
-      urgent: { firstResponse: 120, nextResponse: 240,  resolution: 1440,  internalHandoff: 120 },
-      high:   { firstResponse: 120, nextResponse: 480,  resolution: 2880,  internalHandoff: 240 },
-      normal: { firstResponse: 120, nextResponse: 720,  resolution: 5760,  internalHandoff: 480 },
-      low:    { firstResponse: 120, nextResponse: 1440, resolution: 10080, internalHandoff: 1440 }
+      urgent: { firstResponse: 60, nextResponse: 240,  resolution: 240,  internalHandoff: 120 },
+      high:   { firstResponse: 60, nextResponse: 480,  resolution: 240,  internalHandoff: 240 },
+      normal: { firstResponse: 60, nextResponse: 720,  resolution: 240,  internalHandoff: 480 },
+      low:    { firstResponse: 60, nextResponse: 1440, resolution: 240,  internalHandoff: 1440 }
     },
     L2: null, // inherits L1
     L3: null, // inherits L1
@@ -98,7 +98,9 @@
     return 'L0';
   }
 
-  function getTargets(tier, priority) {
+  function getTargets(tier, priority, groupName) {
+    // Unassigned tickets follow L0 high priority SLA
+    if (!groupName) return SLA_TARGETS.L0.high;
     var p = (priority || 'normal').toLowerCase();
     var tierTargets = SLA_TARGETS[tier] || SLA_TARGETS.L1 || SLA_TARGETS.L0;
     return tierTargets[p] || tierTargets.normal;
@@ -269,7 +271,7 @@
       }
 
       var priority = ticket.priority || 'normal';
-      var targets = getTargets(tier, priority);
+      var targets = getTargets(tier, priority, groupName);
       var now = Date.now();
       var createdAt = new Date(ticket.created_at).getTime();
       var displayGroupName = groupName || 'Unassigned';
@@ -300,9 +302,14 @@
       }
 
       // 2. Next Response
+      var frMetric = slaMetrics[0];
+      var frBreached = frMetric && !frMetric.met && frMetric.elapsedMs >= frMetric.targetMs;
       var nextResp = computeNextResponse(comments, ticket.requester_id);
       var nrTargetMs = (targets.nextResponse || 720) * 60000;
-      if (nextResp) {
+      if (frBreached && (!nextResp || !nextResp.met)) {
+        // 1st response breached → next response is IMMEDIATE
+        slaMetrics.push({ label: 'Next Response', targetMs: 0, elapsedMs: 1, breachAt: now, met: false, immediate: true });
+      } else if (nextResp) {
         if (nextResp.met) {
           slaMetrics.push({ label: 'Next Response', targetMs: nrTargetMs, elapsedMs: 0, breachAt: null, met: true });
         } else {
@@ -442,7 +449,7 @@
     html += '<div class="sla-w-meta">' +
       '<span class="sla-w-badge ' + pathClass + '">' + path + '</span>' +
       '<span class="sla-w-badge sla-w-badge-gray">' + priority.toUpperCase() + '</span>' +
-      '<span class="sla-w-badge sla-w-badge-gray">SLA: ' + (tier === 'L0' ? '1h' : '2h') + '</span>' +
+      '<span class="sla-w-badge sla-w-badge-gray">SLA: ' + (tier === 'L0' ? '30m' : '1h') + '</span>' +
       (isSolved ? '<span class="sla-w-badge sla-w-badge-green">SOLVED</span>' : '') +
     '</div>';
 
@@ -464,13 +471,20 @@
         return;
       }
 
-      var st = m.met ? 'met' : slaStatus(m.elapsedMs, m.targetMs);
-      var p = m.met ? 100 : pct(m.elapsedMs, m.targetMs);
+      var st = m.immediate ? 'breached' : (m.met ? 'met' : slaStatus(m.elapsedMs, m.targetMs));
+      var p = m.immediate ? 100 : (m.met ? 100 : pct(m.elapsedMs, m.targetMs));
       var timeText = getTimeText(m);
+      // Resolution status tag
+      var statusTag = '';
+      if (m.label === 'Resolution' && !m.met) {
+        if (m.elapsedMs >= m.targetMs) statusTag = ' <span style="display:inline-block;padding:1px 5px;border-radius:3px;font-size:8px;font-weight:700;background:#fce4e6;color:#8c232c;vertical-align:middle;margin-left:3px">BREACHED</span>';
+        else if (pct(m.elapsedMs, m.targetMs) > 75) statusTag = ' <span style="display:inline-block;padding:1px 5px;border-radius:3px;font-size:8px;font-weight:700;background:#fff6e5;color:#ad5e00;vertical-align:middle;margin-left:3px">NEARING BREACH</span>';
+        else statusTag = ' <span style="display:inline-block;padding:1px 5px;border-radius:3px;font-size:8px;font-weight:700;background:#edf8f4;color:#038153;vertical-align:middle;margin-left:3px">HEALTHY</span>';
+      }
 
       html += '<div class="sla-w-metric sla-w-st-' + st + '" data-label="' + m.label + '">' +
         '<div class="sla-w-metric-hdr">' +
-          '<span class="sla-w-metric-lbl">' + m.label + '</span>' +
+          '<span class="sla-w-metric-lbl">' + m.label + statusTag + '</span>' +
           '<span class="sla-w-metric-time">' + timeText + '</span>' +
         '</div>' +
         '<div class="sla-w-bar-bg">' +
@@ -487,16 +501,28 @@
       var el = panel.querySelector('[data-label="' + m.label + '"]');
       if (!el) return;
 
-      var st = m.met ? 'met' : slaStatus(m.elapsedMs, m.targetMs);
-      var p = m.met ? 100 : pct(m.elapsedMs, m.targetMs);
+      var st = m.immediate ? 'breached' : (m.met ? 'met' : slaStatus(m.elapsedMs, m.targetMs));
+      var p = m.immediate ? 100 : (m.met ? 100 : pct(m.elapsedMs, m.targetMs));
 
       el.className = 'sla-w-metric sla-w-st-' + st;
       el.querySelector('.sla-w-metric-time').textContent = getTimeText(m);
       el.querySelector('.sla-w-bar-fill').style.width = p + '%';
+      // Update resolution status tag
+      if (m.label === 'Resolution') {
+        var lblEl = el.querySelector('.sla-w-metric-lbl');
+        var tag = '';
+        if (!m.met) {
+          if (m.elapsedMs >= m.targetMs) tag = ' <span style="display:inline-block;padding:1px 5px;border-radius:3px;font-size:8px;font-weight:700;background:#fce4e6;color:#8c232c;vertical-align:middle;margin-left:3px">BREACHED</span>';
+          else if (pct(m.elapsedMs, m.targetMs) > 75) tag = ' <span style="display:inline-block;padding:1px 5px;border-radius:3px;font-size:8px;font-weight:700;background:#fff6e5;color:#ad5e00;vertical-align:middle;margin-left:3px">NEARING BREACH</span>';
+          else tag = ' <span style="display:inline-block;padding:1px 5px;border-radius:3px;font-size:8px;font-weight:700;background:#edf8f4;color:#038153;vertical-align:middle;margin-left:3px">HEALTHY</span>';
+        }
+        lblEl.innerHTML = 'Resolution' + tag;
+      }
     });
   }
 
   function getTimeText(m) {
+    if (m.immediate) return 'IMMEDIATE \u2014 respond now';
     if (m.met) return 'Met' + (m.elapsedMs > 0 ? ' (' + formatDuration(m.elapsedMs) + ')' : '');
     if (m.elapsedMs >= m.targetMs) return 'BREACHED ' + formatDuration(m.elapsedMs - m.targetMs) + ' ago';
     return formatDuration(m.targetMs - m.elapsedMs) + ' left';

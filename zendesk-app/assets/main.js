@@ -554,16 +554,16 @@ function showNotification(message, type) {
 
 var SLA_TARGETS = {
   L0: {
-    urgent: { firstResponse: 60, nextResponse: 240, resolution: 480 },
-    high:   { firstResponse: 60, nextResponse: 480, resolution: 1440 },
-    normal: { firstResponse: 60, nextResponse: 720, resolution: 2880 },
-    low:    { firstResponse: 60, nextResponse: 1440, resolution: 4320 }
+    urgent: { firstResponse: 30, nextResponse: 240, resolution: 60 },
+    high:   { firstResponse: 30, nextResponse: 480, resolution: 60 },
+    normal: { firstResponse: 60, nextResponse: 720, resolution: 120 },
+    low:    { firstResponse: 60, nextResponse: 1440, resolution: 120 }
   },
   L1: {
-    urgent: { firstResponse: 120, nextResponse: 240, resolution: 1440, internalHandoff: 120 },
-    high:   { firstResponse: 120, nextResponse: 480, resolution: 2880, internalHandoff: 240 },
-    normal: { firstResponse: 120, nextResponse: 720, resolution: 5760, internalHandoff: 480 },
-    low:    { firstResponse: 120, nextResponse: 1440, resolution: 10080, internalHandoff: 1440 }
+    urgent: { firstResponse: 60, nextResponse: 240, resolution: 240, internalHandoff: 120 },
+    high:   { firstResponse: 60, nextResponse: 480, resolution: 240, internalHandoff: 240 },
+    normal: { firstResponse: 60, nextResponse: 720, resolution: 240, internalHandoff: 480 },
+    low:    { firstResponse: 60, nextResponse: 1440, resolution: 240, internalHandoff: 1440 }
   },
   L2: null,
   L3: null,
@@ -606,7 +606,9 @@ function detectTier(groupName) {
   return 'L0';
 }
 
-function getSlaTargets(tier, priority) {
+function getSlaTargets(tier, priority, groupName) {
+  // Unassigned tickets follow L0 high priority SLA
+  if (!groupName) return SLA_TARGETS.L0.high;
   var p = (priority || 'normal').toLowerCase();
   var t = SLA_TARGETS[tier] || SLA_TARGETS.L1 || SLA_TARGETS.L0;
   return t[p] || t.normal;
@@ -648,6 +650,7 @@ function slaStatus(elapsedMs, targetMs) {
 }
 
 function slaTimeText(m) {
+  if (m.immediate) return 'IMMEDIATE — respond now';
   if (m.met) return 'Met' + (m.elapsedMs > 0 ? ' (' + formatDuration(m.elapsedMs) + ')' : '');
   if (m.elapsedMs >= m.targetMs) return 'BREACHED ' + formatDuration(m.elapsedMs - m.targetMs) + ' ago';
   return formatDuration(m.targetMs - m.elapsedMs) + ' left';
@@ -770,7 +773,7 @@ async function loadSlaData() {
     }
 
     var priority = ticket.priority || 'normal';
-    var targets = getSlaTargets(tier, priority);
+    var targets = getSlaTargets(tier, priority, groupName);
     var now = Date.now();
     var createdAt = new Date(ticket.created_at).getTime();
 
@@ -799,9 +802,14 @@ async function loadSlaData() {
     }
 
     // 2. Next Response
+    var frMetric = slaMetrics[0];
+    var frBreached = frMetric && !frMetric.met && frMetric.elapsedMs >= frMetric.targetMs;
     var nextResp = computeNextResponse(comments, ticket.requester_id);
     var nrTarget = (targets.nextResponse || 720) * 60000;
-    if (nextResp) {
+    if (frBreached && (!nextResp || !nextResp.met)) {
+      // 1st response breached → next response is IMMEDIATE
+      slaMetrics.push({ label: 'Next Response', targetMs: 0, elapsedMs: 1, breachAt: now, met: false, immediate: true });
+    } else if (nextResp) {
       if (nextResp.met) {
         slaMetrics.push({ label: 'Next Response', targetMs: nrTarget, elapsedMs: 0, breachAt: null, met: true });
       } else {
@@ -894,7 +902,7 @@ function renderSlaSection(metrics, groupName, path, pathClass, tier, priority, i
   html += '<div class="sla-badges">' +
     '<span class="sla-badge ' + pathClass + '">' + path + '</span>' +
     '<span class="sla-badge sla-badge-gray">' + (priority || 'normal').toUpperCase() + '</span>' +
-    '<span class="sla-badge sla-badge-gray">SLA: ' + (tier === 'L0' ? '1h' : '2h') + '</span>' +
+    '<span class="sla-badge sla-badge-gray">SLA: ' + (tier === 'L0' ? '30m' : '1h') + '</span>' +
     (isSolved ? '<span class="sla-badge sla-badge-green">SOLVED</span>' : '') +
   '</div>';
 
@@ -913,11 +921,18 @@ function renderSlaSection(metrics, groupName, path, pathClass, tier, priority, i
       '</div></div>';
       return;
     }
-    var st = m.met ? 'met' : slaStatus(m.elapsedMs, m.targetMs);
-    var p = m.met ? 100 : slaPct(m.elapsedMs, m.targetMs);
+    var st = m.immediate ? 'breached' : (m.met ? 'met' : slaStatus(m.elapsedMs, m.targetMs));
+    var p = m.immediate ? 100 : (m.met ? 100 : slaPct(m.elapsedMs, m.targetMs));
+    // Resolution status label
+    var statusLabel = '';
+    if (m.label === 'Resolution' && !m.met) {
+      if (m.elapsedMs >= m.targetMs) statusLabel = ' <span class="sla-status-tag sla-tag-breached">BREACHED</span>';
+      else if (slaPct(m.elapsedMs, m.targetMs) > 75) statusLabel = ' <span class="sla-status-tag sla-tag-nearing">NEARING BREACH</span>';
+      else statusLabel = ' <span class="sla-status-tag sla-tag-healthy">HEALTHY</span>';
+    }
     html += '<div class="sla-metric sla-status-' + st + '" data-label="' + m.label + '">' +
       '<div class="sla-metric-header">' +
-        '<span class="sla-metric-label">' + m.label + '</span>' +
+        '<span class="sla-metric-label">' + m.label + statusLabel + '</span>' +
         '<span class="sla-metric-time">' + slaTimeText(m) + '</span>' +
       '</div>' +
       '<div class="sla-bar-bg"><div class="sla-bar-fill" style="width:' + p + '%"></div></div>' +
@@ -932,9 +947,20 @@ function updateSlaBars(metrics) {
     if (m.placeholder) return;
     var el = document.querySelector('.sla-metric[data-label="' + m.label + '"]');
     if (!el) return;
-    var st = m.met ? 'met' : slaStatus(m.elapsedMs, m.targetMs);
+    var st = m.immediate ? 'breached' : (m.met ? 'met' : slaStatus(m.elapsedMs, m.targetMs));
     el.className = 'sla-metric sla-status-' + st;
     el.querySelector('.sla-metric-time').textContent = slaTimeText(m);
-    el.querySelector('.sla-bar-fill').style.width = (m.met ? 100 : slaPct(m.elapsedMs, m.targetMs)) + '%';
+    el.querySelector('.sla-bar-fill').style.width = (m.immediate ? 100 : (m.met ? 100 : slaPct(m.elapsedMs, m.targetMs))) + '%';
+    // Update resolution status tag
+    if (m.label === 'Resolution') {
+      var labelEl = el.querySelector('.sla-metric-label');
+      var tag = '';
+      if (!m.met) {
+        if (m.elapsedMs >= m.targetMs) tag = ' <span class="sla-status-tag sla-tag-breached">BREACHED</span>';
+        else if (slaPct(m.elapsedMs, m.targetMs) > 75) tag = ' <span class="sla-status-tag sla-tag-nearing">NEARING BREACH</span>';
+        else tag = ' <span class="sla-status-tag sla-tag-healthy">HEALTHY</span>';
+      }
+      labelEl.innerHTML = 'Resolution' + tag;
+    }
   });
 }
