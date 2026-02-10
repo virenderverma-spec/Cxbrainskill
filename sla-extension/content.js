@@ -303,7 +303,8 @@
 
       // 2. Next Response
       var frMetric = slaMetrics[0];
-      var frBreached = frMetric && !frMetric.met && frMetric.elapsedMs >= frMetric.targetMs;
+      // Treat as breached if elapsed >= 99.5% of target (covers ms-level race)
+      var frBreached = frMetric && !frMetric.met && (frMetric.elapsedMs >= frMetric.targetMs || (frMetric.targetMs > 0 && frMetric.elapsedMs / frMetric.targetMs >= 0.995));
       var nextResp = computeNextResponse(comments, ticket.requester_id);
       var nrTargetMs = (targets.nextResponse || 720) * 60000;
       if (frBreached && (!nextResp || !nextResp.met)) {
@@ -382,10 +383,23 @@
         if (getTicketId() !== ticketId) { cleanup(); return; }
         var n = Date.now();
         slaMetrics.forEach(function(m) {
-          if (m.met || !m.breachAt) return;
+          if (m.met || m.immediate || !m.breachAt) return;
           m.elapsedMs = m.targetMs - Math.max(m.breachAt - n, 0);
           if (m.elapsedMs > m.targetMs) m.elapsedMs = n - (m.breachAt - m.targetMs);
         });
+        // If 1st response just crossed into breach, flip Next Response to IMMEDIATE
+        var fr = slaMetrics[0];
+        if (fr && !fr.met && fr.elapsedMs >= fr.targetMs) {
+          for (var si = 0; si < slaMetrics.length; si++) {
+            if (slaMetrics[si].label === 'Next Response' && !slaMetrics[si].met && !slaMetrics[si].immediate) {
+              slaMetrics[si].immediate = true;
+              slaMetrics[si].targetMs = 0;
+              slaMetrics[si].elapsedMs = 1;
+              slaMetrics[si].breachAt = n;
+              break;
+            }
+          }
+        }
         renderBars(panel, slaMetrics);
       }, 1000);
 
