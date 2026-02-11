@@ -1,0 +1,13 @@
+{
+  "app": {
+    "name": "Meow SLA Sidebar",
+    "short_description": "Shows SLA status for the current ticket based on assigned team.",
+    "long_description": "Displays First Response and Resolution SLA timers with status badges (Healthy, Nearing Breach, Breached) based on which team currently owns the ticket. Supports L0, L1-L3, ConnectX, AT&T, and Airvet with different SLA targets per team and priority. Click to expand escalation history.",
+    "installation_instructions": "Install the app. Optionally configure group name mappings in the settings to match your Zendesk group names to SLA tiers."
+  },
+  "default.l0_groups": "L0 Group Names (comma-separated)",
+  "default.l1l3_groups": "L1-L3 Group Names (comma-separated)",
+  "default.connectx_groups": "ConnectX Group Names (comma-separated)",
+  "default.att_groups": "AT&T Group Names (comma-separated)",
+  "default.airvet_groups": "Airvet Group Names (comma-separated)"
+}

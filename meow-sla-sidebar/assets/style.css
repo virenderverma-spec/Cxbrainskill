@@ -1,0 +1,521 @@
+/* ─── Base ────────────────────────────────────────────────── */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  font-size: 13px;
+  color: #2f3941;
+  background: #fff;
+  line-height: 1.4;
+}
+
+#app {
+  padding: 12px;
+}
+
+/* ─── Loading ─────────────────────────────────────────────── */
+#loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 40px 0;
+  color: #87929d;
+  font-size: 12px;
+}
+
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid #e9ebed;
+  border-top-color: #7c3aed;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+.spinner-small {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid #e9ebed;
+  border-top-color: #7c3aed;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.sla-loading-inline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #87929d;
+  font-size: 12px;
+}
+
+/* ─── Header ──────────────────────────────────────────────── */
+.sla-header {
+  background: #f8f9f9;
+  border: 1px solid #e9ebed;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+}
+
+.sla-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.sla-header-left {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.sla-label {
+  font-size: 11px;
+  color: #87929d;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.sla-team-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: #2f3941;
+}
+
+.sla-group-name {
+  font-size: 11px;
+  color: #68737d;
+}
+
+.sla-header-right {
+  padding-top: 2px;
+}
+
+/* ─── Overall Badge ───────────────────────────────────────── */
+.sla-overall-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.sla-header-escalated {
+  background: #faf5ff;
+  border-color: #c4b5fd;
+}
+
+.sla-escalated-note {
+  font-size: 10px;
+  color: #7c3aed;
+  margin-top: 4px;
+  font-weight: 500;
+}
+
+/* ─── Meta Row ────────────────────────────────────────────── */
+.sla-meta-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 0;
+  margin-bottom: 8px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.sla-meta-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+}
+
+.sla-meta-label {
+  font-size: 10px;
+  color: #87929d;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.sla-meta-value {
+  font-size: 13px;
+  font-weight: 500;
+  color: #2f3941;
+}
+
+.sla-mono {
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 12px;
+}
+
+/* Priority colors */
+.sla-priority-urgent { color: #dc2626; font-weight: 600; }
+.sla-priority-high { color: #d97706; font-weight: 600; }
+.sla-priority-normal { color: #2f3941; }
+.sla-priority-low { color: #87929d; }
+
+/* ─── SLA Sections ────────────────────────────────────────── */
+.sla-section {
+  margin-bottom: 12px;
+}
+
+.sla-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.sla-section-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #49545c;
+}
+
+.sla-section-detail {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 3px;
+  font-size: 11px;
+  color: #68737d;
+}
+
+/* ─── Status Badges ───────────────────────────────────────── */
+.sla-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.sla-badge-healthy,
+.sla-overall-badge.sla-badge-healthy {
+  background: #dcfce7;
+  color: #16a34a;
+}
+
+.sla-badge-nearing,
+.sla-overall-badge.sla-badge-nearing {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.sla-badge-breached,
+.sla-overall-badge.sla-badge-breached {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+/* ─── Progress Bars ───────────────────────────────────────── */
+.sla-progress-bar {
+  width: 100%;
+  height: 4px;
+  background: #e9ebed;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.sla-progress-small {
+  height: 3px;
+}
+
+.sla-progress-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.5s ease;
+}
+
+.sla-fill-healthy { background: #16a34a; }
+.sla-fill-nearing { background: #d97706; }
+.sla-fill-breached { background: #dc2626; }
+
+/* ─── Divider ─────────────────────────────────────────────── */
+.sla-divider {
+  border-top: 1px solid #e9ebed;
+  margin: 10px 0;
+}
+
+/* ─── Total Row ───────────────────────────────────────────── */
+.sla-total-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  color: #49545c;
+  padding: 4px 0;
+}
+
+/* ─── Toggle ──────────────────────────────────────────────── */
+.sla-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 0 2px;
+  font-size: 12px;
+  color: #1f73b7;
+  cursor: pointer;
+  user-select: none;
+}
+
+.sla-toggle:hover {
+  color: #144a75;
+  text-decoration: underline;
+}
+
+.sla-toggle-icon {
+  font-size: 10px;
+}
+
+/* ─── Escalation Section ──────────────────────────────────── */
+.sla-escalation-section {
+  margin-top: 8px;
+  animation: slideDown 0.2s ease;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.sla-escalation-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #49545c;
+  margin-bottom: 8px;
+}
+
+.sla-escalation-empty {
+  font-size: 12px;
+  color: #87929d;
+  padding: 12px 0;
+  text-align: center;
+}
+
+.sla-escalation-card {
+  border: 1px solid #e9ebed;
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  background: #f8f9f9;
+}
+
+.sla-escalation-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2px;
+}
+
+.sla-escalation-card-header strong {
+  font-size: 13px;
+  color: #2f3941;
+}
+
+.sla-escalation-group {
+  font-size: 11px;
+  color: #87929d;
+}
+
+.sla-escalation-card-detail {
+  font-size: 11px;
+  color: #68737d;
+  margin-bottom: 6px;
+}
+
+.sla-escalation-bars {
+  display: flex;
+  gap: 12px;
+}
+
+.sla-escalation-bar-group {
+  flex: 1;
+}
+
+.sla-escalation-bar-label {
+  font-size: 10px;
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  color: #68737d;
+  display: block;
+  margin-bottom: 2px;
+}
+
+/* ─── Tier Timeline ───────────────────────────────────────── */
+.sla-tier-timeline {
+  margin-top: 10px;
+}
+
+.sla-tier-timeline-label {
+  font-size: 11px;
+  color: #68737d;
+  margin-bottom: 4px;
+}
+
+.sla-tier-bar-container {
+  display: flex;
+  width: 100%;
+  height: 24px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: #e9ebed;
+}
+
+.sla-tier-bar-segment {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #a78bfa;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 500;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  border-right: 1px solid rgba(255,255,255,0.3);
+}
+
+.sla-tier-bar-segment span {
+  padding: 0 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sla-tier-bar-segment:nth-child(2n) { background: #8b5cf6; }
+.sla-tier-bar-segment:nth-child(3n) { background: #6d28d9; }
+.sla-tier-current { background: #7c3aed; }
+
+/* ─── MTTR Section ────────────────────────────────────────── */
+.sla-mttr-section {
+  margin: 10px 0 4px;
+  padding: 8px 10px;
+  background: #f8f9f9;
+  border: 1px solid #e9ebed;
+  border-radius: 6px;
+}
+
+.sla-mttr-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.sla-mttr-under {
+  background: #dcfce7;
+  color: #16a34a;
+}
+
+.sla-mttr-over {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.sla-progress-mttr {
+  height: 6px;
+  position: relative;
+  overflow: visible;
+}
+
+.sla-fill-mttr {
+  background: #7c3aed;
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.5s ease;
+}
+
+.sla-mttr-bar-wrapper {
+  position: relative;
+  margin: 6px 0;
+}
+
+.sla-mttr-marker {
+  position: absolute;
+  top: -2px;
+  width: 2px;
+  height: 10px;
+  background: #2f3941;
+  border-radius: 1px;
+  z-index: 1;
+}
+
+.sla-mttr-marker::after {
+  content: 'avg';
+  position: absolute;
+  top: -14px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 8px;
+  color: #68737d;
+  white-space: nowrap;
+}
+
+.sla-mttr-details {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+}
+
+.sla-mttr-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+}
+
+.sla-mttr-stat-label {
+  font-size: 9px;
+  color: #87929d;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.sla-mttr-stat-value {
+  font-size: 12px;
+  font-weight: 600;
+  color: #2f3941;
+}
+
+.sla-mttr-scope {
+  font-weight: 400;
+  font-size: 10px;
+  color: #87929d;
+  margin-left: 4px;
+}
+
+.sla-mttr-sample {
+  font-size: 10px;
+  color: #87929d;
+  text-align: center;
+  margin-top: 4px;
+}
+
+/* ─── Error ───────────────────────────────────────────────── */
+.sla-error {
+  padding: 16px;
+  text-align: center;
+  color: #dc2626;
+  font-size: 12px;
+}

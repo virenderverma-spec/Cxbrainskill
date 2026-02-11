@@ -1,0 +1,57 @@
+{
+  "name": "Meow SLA Sidebar",
+  "author": {
+    "name": "Meow Mobile",
+    "email": "engineering@meow-mobile.co",
+    "url": "https://www.meow-mobile.co"
+  },
+  "defaultLocale": "en",
+  "private": true,
+  "location": {
+    "support": {
+      "ticket_sidebar": {
+        "url": "assets/iframe.html",
+        "flexible": true
+      }
+    }
+  },
+  "version": "1.0.0",
+  "frameworkVersion": "2.0",
+  "parameters": [
+    {
+      "name": "l0_groups",
+      "type": "text",
+      "required": false,
+      "default": "L0,Frontline",
+      "secure": false
+    },
+    {
+      "name": "l1l3_groups",
+      "type": "text",
+      "required": false,
+      "default": "L1,L2,L3,Specialist,Engineering",
+      "secure": false
+    },
+    {
+      "name": "connectx_groups",
+      "type": "text",
+      "required": false,
+      "default": "ConnectX",
+      "secure": false
+    },
+    {
+      "name": "att_groups",
+      "type": "text",
+      "required": false,
+      "default": "AT&T",
+      "secure": false
+    },
+    {
+      "name": "airvet_groups",
+      "type": "text",
+      "required": false,
+      "default": "Airvet",
+      "secure": false
+    }
+  ]
+}
