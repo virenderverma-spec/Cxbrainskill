@@ -1,0 +1,20 @@
+{
+  "name": "Meow SLA Dashboard",
+  "author": {
+    "name": "Meow Mobile",
+    "email": "ops@meowmobile.com",
+    "url": "https://www.meow-mobile.co"
+  },
+  "defaultLocale": "en",
+  "private": true,
+  "location": {
+    "support": {
+      "nav_bar": {
+        "url": "assets/iframe.html",
+        "flexible": true
+      }
+    }
+  },
+  "version": "1.0.0",
+  "frameworkVersion": "2.0"
+}

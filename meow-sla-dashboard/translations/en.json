@@ -1,0 +1,8 @@
+{
+  "app": {
+    "name": "Meow SLA Dashboard",
+    "short_description": "SLA dashboard for all open tickets with live Zendesk data.",
+    "long_description": "Full SLA dashboard showing all open tickets with SLA status, team assignment, escalation history, and issue tracking. Pulls live data from Zendesk via ZAF SDK. Click any ticket ID to open it in Zendesk.",
+    "installation_instructions": "Install the app. It will appear as an icon in the left nav bar. Click to open the SLA dashboard panel."
+  }
+}
