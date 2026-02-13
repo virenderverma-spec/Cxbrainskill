@@ -9,6 +9,7 @@ var escalationHistory = null;
 var expanded = false;
 var refreshInterval = null;
 var mttrCache = null; // cached MTTR so we don't re-fetch every 60s
+var queueSnapshot = null; // cached queue overview
 
 // ─── SLA Matrix (all values in minutes) ────────────────────────
 var SLA_MATRIX = {
@@ -48,7 +49,7 @@ var SLA_MATRIX = {
 
 document.addEventListener('DOMContentLoaded', function() {
   client = ZAFClient.init();
-  client.invoke('resize', { width: '100%', height: '450px' });
+  client.invoke('resize', { width: '100%', height: '580px' });
   loadTicket();
 
   // Auto-refresh every 60 seconds
@@ -85,6 +86,7 @@ function loadTicket() {
     'ticket.priority',
     'ticket.status',
     'ticket.assignee.group.name',
+    'ticket.assignee.user.name',
     'ticket.createdAt',
     'ticket.requester.name',
     'ticket.tags',
@@ -98,6 +100,7 @@ function loadTicket() {
       priority: (function(p){ var v = (p||'').toLowerCase(); return ({'urgent':1,'high':1,'normal':1,'low':1})[v] ? v : 'normal'; })(data['ticket.priority']),
       status: data['ticket.status'],
       groupName: data['ticket.assignee.group.name'] || '',
+      assigneeName: data['ticket.assignee.user.name'] || '',
       createdAt: data['ticket.createdAt'],
       requesterName: data['ticket.requester.name'],
       tags: data['ticket.tags'] || [],
@@ -159,17 +162,19 @@ function detectTeamAndLoad() {
   ticketData.slaTargets = getSlaTargets(ticketData.team, ticketData.priority);
   mttrCache = null; // reset cache on team/ticket change
 
-  // Fetch first response, group assignment, and MTTR in parallel
+  // Fetch first response, group assignment, MTTR, and queue snapshot in parallel
   Promise.all([
     fetchFirstResponseTime(),
     fetchCurrentGroupAssignment(),
-    fetchMTTR()
+    fetchMTTR(),
+    fetchQueueSnapshot()
   ]).then(function(results) {
     var frData = results[0];
     ticketData.firstResponseAt = frData.respondedAt;
     ticketData.firstResponseMet = frData.met;
     ticketData.assignedAt = results[1];
     ticketData.mttr = results[2];
+    ticketData.queueSnapshot = results[3];
     renderCurrentView();
   }).catch(function() {
     renderCurrentView();
@@ -323,6 +328,184 @@ function fetchMTTR() {
   });
 }
 
+// ─── Fetch Queue Snapshot (all open tickets by team + SLA health) ──
+
+function fetchQueueSnapshot() {
+  if (queueSnapshot) return Promise.resolve(queueSnapshot);
+
+  // Fetch all open/new/pending tickets (up to 100)
+  return client.request({
+    url: '/api/v2/search.json?query=' + encodeURIComponent('type:ticket status<solved') + '&sort_by=created_at&sort_order=desc&per_page=100',
+    type: 'GET',
+    dataType: 'json'
+  }).then(function(data) {
+    var tickets = data.results || [];
+    var now = Date.now();
+
+    // Also need group names for each group_id
+    var groupIds = {};
+    tickets.forEach(function(t) {
+      if (t.group_id) groupIds[t.group_id] = true;
+    });
+
+    var gidArray = Object.keys(groupIds);
+    var groupNameMap = {};
+
+    var promises = gidArray.map(function(gid) {
+      return client.request({
+        url: '/api/v2/groups/' + gid + '.json',
+        type: 'GET',
+        dataType: 'json'
+      }).then(function(gData) {
+        groupNameMap[gid] = gData.group.name;
+      }).catch(function() {
+        groupNameMap[gid] = '';
+      });
+    });
+
+    return Promise.all(promises).then(function() {
+      // Categorize each ticket
+      var teams = {
+        'L0':      { total: 0, healthy: 0, nearing: 0, breached: 0 },
+        'L1-L3':   { total: 0, healthy: 0, nearing: 0, breached: 0 },
+        'ConnectX': { total: 0, healthy: 0, nearing: 0, breached: 0 },
+        'AT&T':    { total: 0, healthy: 0, nearing: 0, breached: 0 }
+      };
+      var totalOpen = 0;
+      var totalBreached = 0;
+      var totalNearing = 0;
+
+      tickets.forEach(function(t) {
+        var gName = t.group_id ? (groupNameMap[t.group_id] || '') : '';
+        var team = detectTeam(gName, ticketData.settings || {});
+
+        // Check "escalated to" from custom fields
+        var escalatedTo = null;
+        if (t.custom_fields) {
+          for (var f = 0; f < t.custom_fields.length; f++) {
+            if (t.custom_fields[f].id === ESCALATED_TO_FIELD_ID && t.custom_fields[f].value) {
+              escalatedTo = ESCALATED_TO_MAP[t.custom_fields[f].value] || null;
+              break;
+            }
+          }
+        }
+
+        var slaTeam = escalatedTo || team;
+        // Ensure team bucket exists
+        if (!teams[slaTeam]) {
+          teams[slaTeam] = { total: 0, healthy: 0, nearing: 0, breached: 0 };
+        }
+
+        var priority = (t.priority || 'normal').toLowerCase();
+        if (!({'urgent':1,'high':1,'normal':1,'low':1})[priority]) priority = 'normal';
+        var targets = getSlaTargets(slaTeam, priority);
+        var created = new Date(t.created_at).getTime();
+        var elapsed = now - created;
+
+        // Resolution SLA status
+        var status;
+        if (elapsed >= targets.resolution) {
+          status = 'breached';
+          totalBreached++;
+        } else if (elapsed >= targets.resolution * 0.75) {
+          status = 'nearing';
+          totalNearing++;
+        } else {
+          status = 'healthy';
+        }
+
+        teams[slaTeam].total++;
+        teams[slaTeam][status]++;
+        totalOpen++;
+      });
+
+      var result = {
+        teams: teams,
+        totalOpen: totalOpen,
+        totalBreached: totalBreached,
+        totalNearing: totalNearing,
+        totalHealthy: totalOpen - totalBreached - totalNearing
+      };
+      queueSnapshot = result;
+      return result;
+    });
+  }).catch(function(err) {
+    console.error('Failed to fetch queue snapshot:', err);
+    return null;
+  });
+}
+
+// ─── Render Queue Snapshot ─────────────────────────────────────
+
+function renderQueueSnapshot(snapshot) {
+  if (!snapshot) return '';
+
+  var html = '<div class="queue-snapshot">';
+
+  // Summary row: total open with health donut
+  html += '<div class="queue-summary-row">';
+  html += '<div class="queue-summary-left">';
+  html += '<span class="queue-summary-number">' + snapshot.totalOpen + '</span>';
+  html += '<span class="queue-summary-label">Open Tickets</span>';
+  html += '</div>';
+  html += '<div class="queue-summary-chips">';
+  if (snapshot.totalBreached > 0) {
+    html += '<span class="queue-chip queue-chip-breached">' + snapshot.totalBreached + ' breached</span>';
+  }
+  if (snapshot.totalNearing > 0) {
+    html += '<span class="queue-chip queue-chip-nearing">' + snapshot.totalNearing + ' nearing</span>';
+  }
+  html += '<span class="queue-chip queue-chip-healthy">' + snapshot.totalHealthy + ' healthy</span>';
+  html += '</div>';
+  html += '</div>';
+
+  // Stacked health bar (all tickets)
+  if (snapshot.totalOpen > 0) {
+    var hPct = (snapshot.totalHealthy / snapshot.totalOpen) * 100;
+    var nPct = (snapshot.totalNearing / snapshot.totalOpen) * 100;
+    var bPct = (snapshot.totalBreached / snapshot.totalOpen) * 100;
+    html += '<div class="queue-health-bar">';
+    if (hPct > 0) html += '<div class="queue-hb-seg queue-hb-healthy" style="width:' + hPct + '%"></div>';
+    if (nPct > 0) html += '<div class="queue-hb-seg queue-hb-nearing" style="width:' + nPct + '%"></div>';
+    if (bPct > 0) html += '<div class="queue-hb-seg queue-hb-breached" style="width:' + bPct + '%"></div>';
+    html += '</div>';
+  }
+
+  // Per-team rows
+  var teamOrder = ['L0', 'L1-L3', 'ConnectX', 'AT&T'];
+  html += '<div class="queue-team-grid">';
+  for (var i = 0; i < teamOrder.length; i++) {
+    var tName = teamOrder[i];
+    var t = snapshot.teams[tName];
+    if (!t || t.total === 0) continue;
+
+    var isCurrentTeam = (tName === ticketData.team || tName === ticketData.internalTeam);
+    html += '<div class="queue-team-row' + (isCurrentTeam ? ' queue-team-current' : '') + '">';
+    html += '<div class="queue-team-name">' + escapeHtml(tName) + '</div>';
+    html += '<div class="queue-team-count">' + t.total + '</div>';
+
+    // Mini stacked bar
+    var teamTotal = t.total;
+    html += '<div class="queue-team-bar">';
+    if (t.healthy > 0) html += '<div class="queue-hb-seg queue-hb-healthy" style="width:' + (t.healthy / teamTotal * 100) + '%"></div>';
+    if (t.nearing > 0) html += '<div class="queue-hb-seg queue-hb-nearing" style="width:' + (t.nearing / teamTotal * 100) + '%"></div>';
+    if (t.breached > 0) html += '<div class="queue-hb-seg queue-hb-breached" style="width:' + (t.breached / teamTotal * 100) + '%"></div>';
+    html += '</div>';
+
+    // Mini numbers
+    html += '<div class="queue-team-nums">';
+    if (t.breached > 0) html += '<span class="queue-tn-b">' + t.breached + '</span>';
+    if (t.nearing > 0) html += '<span class="queue-tn-n">' + t.nearing + '</span>';
+    html += '<span class="queue-tn-h">' + t.healthy + '</span>';
+    html += '</div>';
+
+    html += '</div>';
+  }
+  html += '</div>';
+  html += '</div>';
+  return html;
+}
+
 // ─── Fetch Escalation History ──────────────────────────────────
 
 function fetchEscalationHistory() {
@@ -465,13 +648,21 @@ function renderCurrentView() {
   // Build HTML
   var html = '';
 
+  // ── Queue Snapshot (top graphic) ──
+  if (ticketData.queueSnapshot) {
+    html += renderQueueSnapshot(ticketData.queueSnapshot);
+  }
+
   // ── Header section ──
   html += '<div class="sla-header">';
   html += '<div class="sla-header-row">';
   html += '<div class="sla-header-left">';
-  html += '<span class="sla-label">Assigned team</span>';
-  html += '<span class="sla-team-name">' + escapeHtml(ticketData.team) + '</span>';
-  html += '<span class="sla-group-name">' + escapeHtml(ticketData.groupName || 'Unassigned') + '</span>';
+  html += '<span class="sla-label">Assigned to</span>';
+  html += '<span class="sla-team-name">' + escapeHtml(ticketData.groupName || 'Unassigned') + '</span>';
+  if (ticketData.assigneeName) {
+    html += '<span class="sla-group-name">Agent: ' + escapeHtml(ticketData.assigneeName) + '</span>';
+  }
+  html += '<span class="sla-group-name">SLA Tier: ' + escapeHtml(ticketData.team) + '</span>';
   html += '</div>';
   html += '<div class="sla-header-right">';
   html += '<span class="sla-overall-badge sla-badge-' + worstStatus(frStatus, resStatus) + '">' + badgeLabel(worstStatus(frStatus, resStatus)) + '</span>';
@@ -596,14 +787,14 @@ function renderCurrentView() {
       if (expanded) {
         expanded = false;
         escalationHistory = null;
-        client.invoke('resize', { width: '100%', height: '450px' });
+        client.invoke('resize', { width: '100%', height: '580px' });
         renderCurrentView();
       } else {
         toggle.innerHTML = '<div class="sla-loading-inline"><div class="spinner-small"></div> Loading history...</div>';
         fetchEscalationHistory().then(function(history) {
           escalationHistory = history;
           expanded = true;
-          var expandedHeight = 450 + Math.max(history.length * 120, 50) + 80;
+          var expandedHeight = 580 + Math.max(history.length * 120, 50) + 80;
           client.invoke('resize', { width: '100%', height: expandedHeight + 'px' });
           renderCurrentView();
         });

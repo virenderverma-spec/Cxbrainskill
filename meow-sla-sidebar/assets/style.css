@@ -59,6 +59,139 @@ body {
   font-size: 12px;
 }
 
+/* ─── Queue Snapshot ──────────────────────────────────────── */
+.queue-snapshot {
+  background: #f8f9f9;
+  border: 1px solid #e9ebed;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+}
+
+.queue-summary-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.queue-summary-left {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.queue-summary-number {
+  font-size: 22px;
+  font-weight: 700;
+  color: #2f3941;
+  line-height: 1;
+}
+
+.queue-summary-label {
+  font-size: 11px;
+  color: #68737d;
+}
+
+.queue-summary-chips {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.queue-chip {
+  font-size: 9px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+}
+
+.queue-chip-breached { background: #fee2e2; color: #dc2626; }
+.queue-chip-nearing { background: #fef3c7; color: #d97706; }
+.queue-chip-healthy { background: #dcfce7; color: #16a34a; }
+
+/* Overall health bar */
+.queue-health-bar {
+  display: flex;
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 8px;
+  background: #e9ebed;
+}
+
+.queue-hb-seg {
+  height: 100%;
+  transition: width 0.3s ease;
+}
+
+.queue-hb-healthy { background: #16a34a; }
+.queue-hb-nearing { background: #d97706; }
+.queue-hb-breached { background: #dc2626; }
+
+/* Per-team grid */
+.queue-team-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.queue-team-row {
+  display: grid;
+  grid-template-columns: 52px 24px 1fr 42px;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 4px;
+  border-radius: 4px;
+}
+
+.queue-team-current {
+  background: #ede9fe;
+}
+
+.queue-team-name {
+  font-size: 10px;
+  font-weight: 600;
+  color: #49545c;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.queue-team-count {
+  font-size: 12px;
+  font-weight: 700;
+  color: #2f3941;
+  text-align: center;
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+}
+
+.queue-team-bar {
+  display: flex;
+  height: 8px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: #e9ebed;
+}
+
+.queue-team-nums {
+  display: flex;
+  gap: 3px;
+  justify-content: flex-end;
+  font-size: 9px;
+  font-weight: 600;
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+}
+
+.queue-tn-b { color: #dc2626; }
+.queue-tn-n { color: #d97706; }
+.queue-tn-h { color: #16a34a; }
+
 /* ─── Header ──────────────────────────────────────────────── */
 .sla-header {
   background: #f8f9f9;

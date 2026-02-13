@@ -213,6 +213,7 @@ async function loadData(){
         pr:pr,
         st:stMap[ticket.status]||ticket.status,
         team:team,
+        groupName:gname||"Unassigned",
         agent:assUser?assUser.name:"Unassigned",
         age:age,
         resp:age,
@@ -381,7 +382,7 @@ function render(){
 
   var teams=[];var agents=[];
   var teamSet={};var agentSet={};
-  T.forEach(function(t){if(!teamSet[t.team]){teamSet[t.team]=1;teams.push(t.team);}if(!agentSet[t.agent]){agentSet[t.agent]=1;agents.push(t.agent);}});
+  T.forEach(function(t){if(!teamSet[t.groupName]){teamSet[t.groupName]=1;teams.push(t.groupName);}if(!agentSet[t.agent]){agentSet[t.agent]=1;agents.push(t.agent);}});
 
   document.getElementById("ctrl").innerHTML=
     '<span class="ctrl-label">SLA:</span>'+
@@ -390,14 +391,14 @@ function render(){
       return '<span class="pill '+(fS===f?'on':'')+'" onclick="fS=\''+f+'\';render();">'+(f==="all"?"All":f[0].toUpperCase()+f.slice(1))+'<span class="ct">'+n+'</span></span>';
     }).join("")+
     '<div class="sep"></div>'+
-    '<span class="ctrl-label">Team:</span>'+
-    '<select onchange="fT=this.value;render();"><option value="all">All Teams</option>'+teams.map(function(t){return '<option value="'+t+'" '+(fT===t?"selected":"")+'>'+t+'</option>';}).join("")+'</select>'+
+    '<span class="ctrl-label">Assigned To:</span>'+
+    '<select onchange="fT=this.value;render();"><option value="all">All Groups</option>'+teams.map(function(t){return '<option value="'+t+'" '+(fT===t?"selected":"")+'>'+t+'</option>';}).join("")+'</select>'+
     '<span class="ctrl-label">Agent:</span>'+
     '<select onchange="fA=this.value;render();"><option value="all">All Agents</option>'+agents.map(function(a){return '<option value="'+a+'" '+(fA===a?"selected":"")+'>'+a+'</option>';}).join("")+'</select>';
 
   var tix=T.filter(function(t){
     if(fS!=="all"&&w(t)!==fS)return false;
-    if(fT!=="all"&&t.team!==fT)return false;
+    if(fT!=="all"&&t.groupName!==fT)return false;
     if(fA!=="all"&&t.agent!==fA)return false;
     return true;
   });
@@ -420,7 +421,7 @@ function render(){
   var cols=[
     {k:"id",l:"Ticket",w:"75px"},{k:"st",l:"Status",w:"78px"},{k:"pr",l:"Priority",w:"78px"},
     {k:"sla",l:"SLA",w:"78px"},{k:"team",l:"Assigned To",w:"120px"},{k:"agent",l:"Agent",w:"135px"},
-    {k:"issue",l:"Issue",w:""},{k:"iage",l:"Issue Age",w:"90px"},{k:"age",l:"Ticket Age",w:"90px"}
+    {k:"iage",l:"Issue Age",w:"90px"},{k:"age",l:"Ticket Age",w:"90px"},{k:"issue",l:"Issue",w:""}
   ];
   var th=cols.map(function(c){return '<th class="'+(sBy===c.k?'sorted':'')+'" style="'+(c.w?'width:'+c.w:'')+'" onclick="ss(\''+c.k+'\')">'+c.l+(sBy===c.k?'<span style="font-size:9px;margin-left:3px;">'+(sDir==="desc"?"\u2193":"\u2191")+'</span>':'')+'</th>';}).join("");
 
@@ -431,16 +432,8 @@ function render(){
       '<td><span class="b '+stc(t.st)+'">'+t.st+'</span></td>'+
       '<td><span class="b '+pc(t.pr)+'">'+t.pr+'</span></td>'+
       '<td><span class="b '+bc(ws)+'">'+bl(ws)+'</span></td>'+
-      '<td><span class="bt" style="background:'+TC[t.team]+'15;color:'+TC[t.team]+';border:1px solid '+TC[t.team]+'33;">'+t.team+'</span></td>'+
+      '<td style="font-size:12px;color:#374151;">'+t.groupName+'</td>'+
       '<td style="font-size:12px;color:#374151;">'+t.agent+'</td>'+
-      '<td>'+(t.issue?
-        '<div style="font-size:11px;color:#374151;line-height:1.4;">'+t.issue.text+'</div>'+
-        '<div style="display:flex;align-items:center;gap:6px;margin-top:3px;">'+
-          '<span class="issue-src '+(t.issue.sys?'src-s':'src-v')+'">'+t.issue.src+'</span>'+
-          (t.issue.sys?'<span style="font-size:9px;color:#86868b;">since '+t.issue.since+'</span>'
-          :'<span style="font-size:9px;color:#86868b;">via ticket</span>')+
-        '</div>'
-      :'<span style="color:#aeaeb2;font-size:11px;">No issue reported</span>')+'</td>'+
       '<td style="text-align:center;">'+
         (t.issue&&t.issue.sys
           ?'<div style="font-size:13px;font-weight:700;font-variant-numeric:tabular-nums;color:#dc2626;">'+fmt(t.issue.el)+'</div>'+
@@ -450,6 +443,14 @@ function render(){
       '<td style="text-align:center;">'+
         '<div style="font-size:13px;font-weight:700;font-variant-numeric:tabular-nums;">'+fmt(t.age)+'</div>'+
       '</td>'+
+      '<td>'+(t.issue?
+        '<div style="font-size:11px;color:#374151;line-height:1.4;">'+t.issue.text+'</div>'+
+        '<div style="display:flex;align-items:center;gap:6px;margin-top:3px;">'+
+          '<span class="issue-src '+(t.issue.sys?'src-s':'src-v')+'">'+t.issue.src+'</span>'+
+          (t.issue.sys?'<span style="font-size:9px;color:#86868b;">since '+t.issue.since+'</span>'
+          :'<span style="font-size:9px;color:#86868b;">via ticket</span>')+
+        '</div>'
+      :'<span style="color:#aeaeb2;font-size:11px;">No issue reported</span>')+'</td>'+
     '</tr>';
   }).join("");
 
