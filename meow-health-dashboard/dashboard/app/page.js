@@ -85,6 +85,14 @@ export default function Dashboard() {
     URL.revokeObjectURL(url);
   };
 
+  // When a proactive ticket is created, update both the selected customer and the main list
+  const handleCustomerUpdate = useCallback((updatedCustomer) => {
+    setSelectedCustomer(updatedCustomer);
+    setCustomers(prev => prev.map(c =>
+      c.id === updatedCustomer.id ? updatedCustomer : c
+    ));
+  }, []);
+
   // Detail view
   if (selectedCustomer) {
     return (
@@ -92,6 +100,7 @@ export default function Dashboard() {
         <CustomerDetail
           customer={selectedCustomer}
           onBack={() => setSelectedCustomer(null)}
+          onCustomerUpdate={handleCustomerUpdate}
         />
       </div>
     );
@@ -101,7 +110,6 @@ export default function Dashboard() {
     <div className="max-w-[1200px] mx-auto px-4 py-6">
       <Header
         severityCounts={severityCounts}
-        slaCounts={slaCounts}
         total={customers.length}
         lastUpdated={lastUpdated}
         onRefresh={fetchData}

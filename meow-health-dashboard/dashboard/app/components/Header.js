@@ -12,7 +12,7 @@ const FILTERS = [
 ];
 
 export default function Header({
-  severityCounts, slaCounts, total, lastUpdated,
+  severityCounts, total, lastUpdated,
   onRefresh, onExport, searchTerm, onSearchChange, statusFilter, onStatusChange,
   ticketCount,
 }) {
@@ -49,16 +49,22 @@ export default function Header({
           </p>
         </div>
         <div className="flex items-center gap-3">
-          {/* SLA badges */}
-          {slaCounts.breached > 0 && (
-            <span className="px-2.5 py-1 rounded-md text-xs font-bold bg-[#450A0A] text-sla-breached border border-red-800/50 animate-pulse">
-              {slaCounts.breached} BREACHED
-            </span>
+          {/* Severity badges — clickable, match filter categories */}
+          {severityCounts.critical > 0 && (
+            <button
+              onClick={() => onStatusChange('critical')}
+              className="px-2.5 py-1 rounded-md text-xs font-bold bg-[#450A0A] text-sla-breached border border-red-800/50 animate-pulse hover:brightness-125 transition"
+            >
+              {severityCounts.critical} CRITICAL
+            </button>
           )}
-          {slaCounts.critical > 0 && (
-            <span className="px-2.5 py-1 rounded-md text-xs font-bold bg-[#451A03] text-sla-critical border border-amber-800/50">
-              {slaCounts.critical} CRITICAL
-            </span>
+          {severityCounts.high > 0 && (
+            <button
+              onClick={() => onStatusChange('high')}
+              className="px-2.5 py-1 rounded-md text-xs font-bold bg-[#451A03] text-sla-critical border border-amber-800/50 hover:brightness-125 transition"
+            >
+              {severityCounts.high} HIGH
+            </button>
           )}
           <span className="text-[11px] text-gray-600">{timeAgo}</span>
           <button onClick={onRefresh} className="px-3 py-1.5 text-xs bg-dark-surface text-gray-400 border border-dark-border rounded-md hover:text-gray-200 hover:bg-dark-hover transition">

@@ -1,6 +1,8 @@
 'use client';
 
+import { useState } from 'react';
 import { formatHours, formatAge, slaBadge, TAG_COLORS, JOURNEY_STAGES, ZENDESK_BASE } from './shared';
+import ProactiveOutreach from './ProactiveOutreach';
 
 const STAGE_STATUS = {
   passed: { icon: '\u2713', color: 'bg-green-500', text: 'text-green-400', ring: 'ring-green-500/30' },
@@ -27,9 +29,19 @@ function getStageTimestamp(stageId, timestamps) {
   }
 }
 
-export default function CustomerDetail({ customer, onBack }) {
+export default function CustomerDetail({ customer, onBack, onCustomerUpdate }) {
+  const [showOutreach, setShowOutreach] = useState(false);
   const sla = slaBadge(customer.slaStatus);
   const stuckOrder = customer.stuckOrder || 1;
+
+  // Check if a proactive outreach ticket was sent in the last 3 days
+  const hasRecentOutreach = (customer.tickets || []).some(t => {
+    if (!t.tags?.includes('proactive_outreach')) return false;
+    const created = new Date(t.created_at);
+    const threeDaysAgo = Date.now() - 3 * 24 * 60 * 60 * 1000;
+    return created.getTime() > threeDaysAgo;
+  });
+  const hasTickets = customer.tickets && customer.tickets.length > 0;
 
   const resolutionSteps = buildResolutionSteps(customer.stuckAt, customer.issueTags || [], customer);
   const kbArticles = getKbArticles(customer.stuckAt, customer.issueTags || [], customer);
@@ -271,7 +283,7 @@ export default function CustomerDetail({ customer, onBack }) {
             <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">
               Zendesk Tickets {customer.tickets?.length > 0 ? `(${customer.tickets.length})` : ''}
             </h3>
-            {customer.tickets && customer.tickets.length > 0 ? (
+            {hasTickets ? (
               <div className="space-y-2">
                 {customer.tickets.map(ticket => (
                   <a
@@ -283,14 +295,21 @@ export default function CustomerDetail({ customer, onBack }) {
                   >
                     <div className="flex items-center justify-between mb-1">
                       <span className="font-mono text-xs text-accent-blue">ZD-{ticket.id}</span>
-                      <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${
-                        ticket.status === 'open' ? 'bg-red-900/20 text-red-400' :
-                        ticket.status === 'new' ? 'bg-blue-900/20 text-blue-400' :
-                        ticket.status === 'pending' ? 'bg-amber-900/20 text-amber-400' :
-                        'bg-gray-800/50 text-gray-400'
-                      }`}>
-                        {ticket.status}
-                      </span>
+                      <div className="flex items-center gap-1.5">
+                        {ticket.tags?.includes('proactive_outreach') && (
+                          <span className="text-[9px] font-medium px-1.5 py-0.5 rounded bg-green-900/20 text-green-400 border border-green-800/20">
+                            Proactive
+                          </span>
+                        )}
+                        <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${
+                          ticket.status === 'open' ? 'bg-red-900/20 text-red-400' :
+                          ticket.status === 'new' ? 'bg-blue-900/20 text-blue-400' :
+                          ticket.status === 'pending' ? 'bg-amber-900/20 text-amber-400' :
+                          'bg-gray-800/50 text-gray-400'
+                        }`}>
+                          {ticket.status}
+                        </span>
+                      </div>
                     </div>
                     <p className="text-xs text-gray-300 truncate">{ticket.subject}</p>
                   </a>
@@ -298,6 +317,24 @@ export default function CustomerDetail({ customer, onBack }) {
               </div>
             ) : (
               <p className="text-xs text-gray-600 italic mb-3">No linked tickets found</p>
+            )}
+
+            {/* Proactive outreach CTA — show only if no tickets or no recent proactive outreach */}
+            {customer.email && !hasRecentOutreach && (
+              <div className="mt-3">
+                <button
+                  onClick={() => setShowOutreach(true)}
+                  className="w-full py-2.5 rounded-lg text-xs font-semibold bg-green-900/20 text-green-400 border border-green-800/30 hover:bg-green-900/30 transition flex items-center justify-center gap-2"
+                >
+                  <span className="text-base">&#9993;</span>
+                  Proactive Reach Out
+                </button>
+              </div>
+            )}
+            {hasRecentOutreach && (
+              <div className="mt-3 text-[10px] text-gray-600 text-center italic">
+                Proactive outreach sent recently
+              </div>
             )}
 
             {/* Zendesk CTAs */}
@@ -322,6 +359,27 @@ export default function CustomerDetail({ customer, onBack }) {
           </div>
         </div>
       </div>
+
+      {/* Proactive Outreach Modal */}
+      {showOutreach && (
+        <ProactiveOutreach
+          customer={customer}
+          onClose={() => setShowOutreach(false)}
+          onTicketCreated={(ticket) => {
+            // Update customer with the new ticket so the UI reflects it immediately
+            // Remove Silent Stuck tag since customer now has a ticket
+            const updatedTags = (customer.issueTags || []).filter(t => t !== 'Silent Stuck');
+            const updated = {
+              ...customer,
+              tickets: [...(customer.tickets || []), ticket],
+              ticketCount: (customer.ticketCount || 0) + 1,
+              isSilent: false,
+              issueTags: updatedTags,
+            };
+            if (onCustomerUpdate) onCustomerUpdate(updated);
+          }}
+        />
+      )}
     </div>
   );
 }
