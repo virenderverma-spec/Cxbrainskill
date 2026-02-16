@@ -27,6 +27,9 @@ export default function Header({
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-lg font-bold text-white">Customer Health Dashboard</h1>
+            <span className="px-2 py-0.5 rounded-md text-sm font-bold bg-accent-blue/15 text-accent-blue border border-accent-blue/30 tabular-nums">
+              {total}
+            </span>
             <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-accent-purple/20 text-accent-purple border border-accent-purple/30">
               Databricks
             </span>

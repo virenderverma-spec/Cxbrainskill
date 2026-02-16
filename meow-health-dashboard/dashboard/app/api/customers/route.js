@@ -1,5 +1,38 @@
 import { NextResponse } from 'next/server';
 
+// --- Zendesk API ---
+const ZENDESK_SUBDOMAIN = process.env.ZENDESK_SUBDOMAIN;
+const ZENDESK_EMAIL = process.env.ZENDESK_EMAIL;
+const ZENDESK_API_TOKEN = process.env.ZENDESK_API_TOKEN;
+const ZENDESK_AUTH = Buffer.from(`${ZENDESK_EMAIL}/token:${ZENDESK_API_TOKEN}`).toString('base64');
+
+// Batch-lookup Zendesk user IDs by requester_ids (up to 100 per call)
+async function lookupZendeskUsers(requesterIds) {
+  if (!requesterIds.length || !ZENDESK_SUBDOMAIN) return {};
+  const emailByRequesterId = {};
+  // show_many supports up to 100 IDs per call
+  for (let i = 0; i < requesterIds.length; i += 100) {
+    const batch = requesterIds.slice(i, i + 100);
+    try {
+      const res = await fetch(
+        `https://${ZENDESK_SUBDOMAIN}.zendesk.com/api/v2/users/show_many.json?ids=${batch.join(',')}`,
+        { headers: { 'Authorization': `Basic ${ZENDESK_AUTH}` }, cache: 'no-store' }
+      );
+      if (res.ok) {
+        const data = await res.json();
+        for (const user of (data.users || [])) {
+          if (user.email) {
+            emailByRequesterId[user.id] = user.email.toLowerCase();
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Zendesk user lookup error:', err.message);
+    }
+  }
+  return emailByRequesterId;
+}
+
 // --- Databricks SQL Statement API ---
 const DATABRICKS_HOST = process.env.DATABRICKS_HOST;
 const DATABRICKS_TOKEN = process.env.DATABRICKS_TOKEN;
@@ -174,8 +207,7 @@ SELECT
   t.assignee_id,
   t.group_id
 FROM prod_catalog.customer_support.zendesk_tickets t
-WHERE t.status IN ('new', 'open', 'pending', 'hold')
-  AND t.tags NOT LIKE '%pagerduty%'
+WHERE t.tags NOT LIKE '%pagerduty%'
   AND t.tags NOT LIKE '%sla_alert%'
   AND t.tags NOT LIKE '%slo%'
   AND t.tags NOT LIKE '%rca-auto%'
@@ -297,12 +329,15 @@ function computeHealthScore(customer, tickets) {
   else if (stuckHours > 24) score -= 20;    // 1-2 days: moderate
   else if (stuckHours > 8) score -= 10;     // 8-24 hours: early
 
-  // Technical blocker penalties
-  if (customer.esim_error) score -= 25;     // eSIM ERROR
-  if (customer.portin_stuck) score -= 15;   // Port-in stuck
-  if (customer.portin_conflict) score -= 15; // Port-in conflict (additional)
-  const esimStatus = customer.latest_order_esim_status;
-  if (esimStatus === 'FAILED') score -= 20; // eSIM FAILED
+  // Technical blocker penalties — skip for completed orders (number is activated)
+  const orderCompleted = customer.latest_order_status === 'COMPLETED';
+  if (!orderCompleted) {
+    if (customer.esim_error) score -= 25;     // eSIM ERROR
+    if (customer.portin_stuck) score -= 15;   // Port-in stuck
+    if (customer.portin_conflict) score -= 15; // Port-in conflict (additional)
+    const esimStatus = customer.latest_order_esim_status;
+    if (esimStatus === 'FAILED') score -= 20; // eSIM FAILED
+  }
 
   // Stage position penalty (later stages = worse, more invested customer)
   const stageOrder = JOURNEY_STAGES.find(s => s.id === customer.stuck_stage)?.order || 1;
@@ -351,11 +386,20 @@ function computeSlaStatus(stuckHours, healthScore, tickets) {
 function deriveIssueTags(customer, tickets) {
   const tags = new Set();
 
-  // From Databricks data (ground truth)
-  if (customer.esim_error) tags.add('eSIM Failed');
-  if (customer.portin_stuck) tags.add('MNP Stuck');
-  if (customer.portin_conflict) tags.add('MNP Conflict');
-  if (customer.stuck_stage === 'payment') tags.add('Payment Stuck');
+  const orderCompleted = customer.latest_order_status === 'COMPLETED';
+
+  // From Databricks data (ground truth) — skip eSIM/MNP tags if order is completed (number is activated)
+  if (!orderCompleted) {
+    if (customer.esim_error) tags.add('eSIM Failed');
+    if (customer.portin_stuck) tags.add('MNP Stuck');
+    if (customer.portin_conflict) tags.add('MNP Conflict');
+    if (customer.stuck_stage === 'payment') tags.add('Payment Stuck');
+  }
+
+  // Airvet-specific tag for completed orders stuck at pet insurance
+  if (orderCompleted && customer.stuck_stage === 'airvet_account') {
+    tags.add('Airvet Pending');
+  }
 
   // From ticket analysis
   for (const t of tickets) {
@@ -365,14 +409,14 @@ function deriveIssueTags(customer, tickets) {
     const sub = (t.subject || '').toLowerCase();
     if (sub.includes('refund')) tags.add('Refund Pending');
     if (sub.includes('double charge') || sub.includes('duplicate')) tags.add('Double Charged');
-    if (sub.includes('no service') || sub.includes('no signal')) tags.add('No Network');
+    if (!orderCompleted && (sub.includes('no service') || sub.includes('no signal'))) tags.add('No Network');
     if (sub.includes('login') || sub.includes('unable to login')) tags.add('Login Issue');
     if (sub.includes('cancel') || sub.includes('churn') || sub.includes('termination')) tags.add('Churn Risk');
   }
 
-  // Silent stuck customers (no tickets)
-  if (tickets.length === 0 && customer.stuck_hours > 48) tags.add('Silent Stuck');
-  if (tickets.length === 0 && customer.stuck_hours > 168) tags.add('Churn Risk');
+  // Silent stuck customers (no tickets) — not applicable for completed orders with Airvet issue
+  if (!orderCompleted && tickets.length === 0 && customer.stuck_hours > 48) tags.add('Silent Stuck');
+  if (!orderCompleted && tickets.length === 0 && customer.stuck_hours > 168) tags.add('Churn Risk');
 
   return [...tags];
 }
@@ -448,12 +492,17 @@ export async function GET() {
     }
     const tickets = [...ticketMap.values()];
 
-    // Index tickets by requester_id for quick lookup
-    const ticketsByRequester = {};
+    // Look up Zendesk user emails for all unique requester_ids
+    const uniqueRequesterIds = [...new Set(tickets.map(t => t.requester_id).filter(Boolean))];
+    const emailByRequesterId = await lookupZendeskUsers(uniqueRequesterIds);
+
+    // Index tickets by requester email (lowercase) for customer matching
+    const ticketsByEmail = {};
     for (const t of tickets) {
-      if (!t.requester_id) continue;
-      if (!ticketsByRequester[t.requester_id]) ticketsByRequester[t.requester_id] = [];
-      ticketsByRequester[t.requester_id].push(t);
+      const email = emailByRequesterId[t.requester_id];
+      if (!email) continue;
+      if (!ticketsByEmail[email]) ticketsByEmail[email] = [];
+      ticketsByEmail[email].push(t);
     }
 
     // Build customer records
@@ -474,9 +523,9 @@ export async function GET() {
         portin_conflict: portinConflict,
       };
 
-      // Find matching tickets (currently by requester_id — may need phone/email matching later)
-      // For now, tickets are shown globally since we don't have a requester→user_id mapping
-      const customerTickets = []; // Will be populated if we can match
+      // Match tickets by customer email
+      const customerEmail = (c.email || '').toLowerCase();
+      const customerTickets = customerEmail ? (ticketsByEmail[customerEmail] || []) : [];
 
       const stageInfo = JOURNEY_STAGES.find(s => s.id === c.stuck_stage) || JOURNEY_STAGES[0];
       const healthScore = computeHealthScore(customerData, customerTickets);
