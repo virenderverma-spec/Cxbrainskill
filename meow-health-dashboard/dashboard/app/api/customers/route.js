@@ -156,6 +156,7 @@ WHERE (c.onboarding_status IS NULL OR c.onboarding_status != 'COMPLETED')
   AND c.latest_order_status IS NOT NULL
   AND c.latest_order_status NOT IN ('CANCELLED', 'PENDINGCANCELLATION')
   AND NOT (c.latest_order_status = 'DRAFT' AND c.onboarding_payment_completed_at IS NULL)
+  AND NOT (c.latest_order_status = 'COMPLETED' AND c.telco_customer_status = 'Activated')
 ORDER BY stuck_hours DESC NULLS LAST
 LIMIT 500
 `;
