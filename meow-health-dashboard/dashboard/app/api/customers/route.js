@@ -6,6 +6,52 @@ const ZENDESK_EMAIL = process.env.ZENDESK_EMAIL;
 const ZENDESK_API_TOKEN = process.env.ZENDESK_API_TOKEN;
 const ZENDESK_AUTH = Buffer.from(`${ZENDESK_EMAIL}/token:${ZENDESK_API_TOKEN}`).toString('base64');
 
+// Fetch active tickets from Zendesk API (catches tickets not yet synced to Databricks)
+// Searches for all open, pending, hold, and solved tickets from the last 90 days
+async function fetchActiveZendeskTickets() {
+  if (!ZENDESK_SUBDOMAIN) return [];
+  const allTickets = [];
+  // Fetch open/pending/hold tickets and recently solved ones
+  const queries = [
+    'type:ticket status:open status:pending status:hold created>90days',
+    'type:ticket status:solved created>30days',
+    'type:ticket tags:proactive_outreach created>30days',
+  ];
+  for (const query of queries) {
+    try {
+      const res = await fetch(
+        `https://${ZENDESK_SUBDOMAIN}.zendesk.com/api/v2/search.json?query=${encodeURIComponent(query)}&per_page=100`,
+        { headers: { 'Authorization': `Basic ${ZENDESK_AUTH}` }, cache: 'no-store' }
+      );
+      if (!res.ok) continue;
+      const data = await res.json();
+      for (const t of (data.results || [])) {
+        allTickets.push({
+          id: String(t.id),
+          subject: t.subject,
+          status: t.status,
+          priority: t.priority,
+          created_at: t.created_at,
+          updated_at: t.updated_at,
+          requester_id: String(t.requester_id),
+          assignee_id: t.assignee_id ? String(t.assignee_id) : null,
+          group_id: t.group_id ? String(t.group_id) : null,
+          tags: t.tags || [],
+          inquiryType: null,
+          inquiryTypeFormatted: null,
+          intent: null,
+          sentiment: null,
+          language: null,
+          signalCode: null,
+        });
+      }
+    } catch (err) {
+      console.error('Zendesk ticket search error:', err.message);
+    }
+  }
+  return allTickets;
+}
+
 // Batch-lookup Zendesk user IDs by requester_ids (up to 100 per call)
 async function lookupZendeskUsers(requesterIds) {
   if (!requesterIds.length || !ZENDESK_SUBDOMAIN) return {};
@@ -208,8 +254,7 @@ SELECT
   t.group_id
 FROM prod_catalog.customer_support.zendesk_tickets t
 WHERE t.tags NOT LIKE '%pagerduty%'
-  AND t.tags NOT LIKE '%sla_alert%'
-  AND t.tags NOT LIKE '%slo%'
+  AND t.tags NOT LIKE '%"slo"%'
   AND t.tags NOT LIKE '%rca-auto%'
   AND t.tags NOT LIKE '%non_user%'
   AND t.created_at >= DATE_SUB(CURRENT_TIMESTAMP(), 90)
@@ -453,14 +498,117 @@ function getRecommendedAction(customer, tickets) {
   }
 }
 
+// --- Ticket Funnel: Unresponded ticket detection ---
+
+async function fetchTicketComments(ticketId) {
+  try {
+    const res = await fetch(
+      `https://${ZENDESK_SUBDOMAIN}.zendesk.com/api/v2/tickets/${ticketId}/comments.json?sort_order=desc&per_page=10`,
+      { headers: { 'Authorization': `Basic ${ZENDESK_AUTH}` }, cache: 'no-store' }
+    );
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.comments || [];
+  } catch (err) {
+    console.error(`Failed to fetch comments for ticket ${ticketId}:`, err.message);
+    return [];
+  }
+}
+
+async function findUnrespondedTickets(tickets, emailByRequesterId) {
+  // Exclude internal/automated tickets
+  const INTERNAL_DOMAINS = ['rockstar-automations.com'];
+  const SYSTEM_TAGS = ['sla_alert', 'sla_alert2', 'pagerduty', 'slo', 'rca-auto', 'non_user'];
+
+  // Only look at new, open, hold tickets from real customers
+  const activeTickets = tickets.filter(t => {
+    if (!['new', 'open', 'hold'].includes(t.status)) return false;
+    // Exclude tickets with system tags
+    const tags = Array.isArray(t.tags) ? t.tags : [];
+    if (tags.some(tag => SYSTEM_TAGS.includes(tag))) return false;
+    // Exclude internal requester emails
+    const email = emailByRequesterId[t.requester_id];
+    if (email && INTERNAL_DOMAINS.some(d => email.endsWith('@' + d))) return false;
+    return true;
+  });
+
+  // Fetch comments with concurrency limit of 10
+  const results = [];
+  for (let i = 0; i < activeTickets.length; i += 10) {
+    const batch = activeTickets.slice(i, i + 10);
+    const commentResults = await Promise.allSettled(
+      batch.map(t => fetchTicketComments(t.id))
+    );
+    for (let j = 0; j < batch.length; j++) {
+      const ticket = batch[j];
+      const comments = commentResults[j].status === 'fulfilled' ? commentResults[j].value : [];
+      results.push({ ticket, comments });
+    }
+  }
+
+  const unresponded = [];
+  const now = Date.now();
+
+  for (const { ticket, comments } of results) {
+    // Find the last public comment
+    const publicComments = comments.filter(c => c.public);
+
+    let waitingSinceDate;
+    let hasAgentResponse = false;
+
+    if (publicComments.length === 0) {
+      // No public comments at all — agent needs to respond
+      waitingSinceDate = new Date(ticket.created_at);
+    } else {
+      // Comments are sorted desc (newest first)
+      const lastPublic = publicComments[0];
+      if (String(lastPublic.author_id) === String(ticket.requester_id)) {
+        // Customer spoke last — agent needs to respond
+        waitingSinceDate = new Date(lastPublic.created_at);
+        hasAgentResponse = publicComments.some(c => String(c.author_id) !== String(ticket.requester_id));
+      } else {
+        // Agent spoke last — customer needs to respond, skip
+        continue;
+      }
+    }
+
+    const waitingSinceHours = (now - waitingSinceDate.getTime()) / (1000 * 60 * 60);
+
+    if (waitingSinceHours >= 24) {
+      unresponded.push({
+        id: ticket.id,
+        subject: ticket.subject,
+        status: ticket.status,
+        priority: ticket.priority,
+        created_at: ticket.created_at,
+        updated_at: ticket.updated_at,
+        requester_id: ticket.requester_id,
+        assignee_id: ticket.assignee_id,
+        tags: ticket.tags || [],
+        inquiryTypeFormatted: ticket.inquiryTypeFormatted || null,
+        sentiment: ticket.sentiment || null,
+        waitingSinceHours: Math.round(waitingSinceHours * 10) / 10,
+        lastCustomerMessageAt: waitingSinceDate.toISOString(),
+        hasAgentResponse,
+        requesterEmail: emailByRequesterId[ticket.requester_id] || null,
+      });
+    }
+  }
+
+  // Sort by waiting time descending (oldest/longest waiting first)
+  unresponded.sort((a, b) => b.waitingSinceHours - a.waitingSinceHours);
+  return unresponded;
+}
+
 // --- Main API Handler ---
 
 export async function GET() {
   try {
-    // Run both queries in parallel
-    const [stuckCustomers, ticketRows] = await Promise.all([
+    // Run Databricks queries + Zendesk live ticket search in parallel
+    const [stuckCustomers, ticketRows, liveZendeskTickets] = await Promise.all([
       runSQL(STUCK_CUSTOMERS_SQL),
       runSQL(ZENDESK_TICKETS_SQL),
+      fetchActiveZendeskTickets(),
     ]);
 
     // Deduplicate tickets (Databricks may have multiple rows per ticket from incremental syncs)
@@ -490,6 +638,22 @@ export async function GET() {
         });
       }
     }
+    // Merge live Zendesk tickets (catches recent tickets not yet in Databricks,
+    // tickets filtered by tag exclusions, and gets real-time ticket status)
+    for (const zt of liveZendeskTickets) {
+      const existing = ticketMap.get(zt.id);
+      if (!existing) {
+        // Ticket not in Databricks at all — add it
+        ticketMap.set(zt.id, zt);
+      } else if (new Date(zt.updated_at) > new Date(existing.updated_at)) {
+        // Ticket exists but Zendesk has newer status — update status & tags
+        existing.status = zt.status;
+        existing.tags = zt.tags;
+        existing.updated_at = zt.updated_at;
+        existing.priority = zt.priority;
+      }
+    }
+
     const tickets = [...ticketMap.values()];
 
     // Look up Zendesk user emails for all unique requester_ids
@@ -523,9 +687,12 @@ export async function GET() {
         portin_conflict: portinConflict,
       };
 
-      // Match tickets by customer email
+      // Match tickets by customer email — only active tickets (open, pending, hold, solved)
       const customerEmail = (c.email || '').toLowerCase();
-      const customerTickets = customerEmail ? (ticketsByEmail[customerEmail] || []) : [];
+      const allCustomerTickets = customerEmail ? (ticketsByEmail[customerEmail] || []) : [];
+      const customerTickets = allCustomerTickets
+        .filter(t => ['new', 'open', 'pending', 'hold', 'solved'].includes(t.status))
+        .sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
 
       const stageInfo = JOURNEY_STAGES.find(s => s.id === c.stuck_stage) || JOURNEY_STAGES[0];
       const healthScore = computeHealthScore(customerData, customerTickets);
@@ -614,6 +781,9 @@ export async function GET() {
       signalCode: t.signalCode,
     }));
 
+    // Ticket Funnel: find unresponded tickets (>24h without agent reply)
+    const unrespondedTickets = await findUnrespondedTickets(tickets, emailByRequesterId);
+
     return NextResponse.json({
       customers,
       total: customers.length,
@@ -621,6 +791,7 @@ export async function GET() {
       slaCounts,
       journeyFunnel,
       recentTickets: unmatchedTickets,
+      unrespondedTickets,
       ticketCount: tickets.length,
       fetchedAt: new Date().toISOString(),
       source: 'databricks',

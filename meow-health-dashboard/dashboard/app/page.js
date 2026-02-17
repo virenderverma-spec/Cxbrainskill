@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import Header from './components/Header';
 import PriorityQueue from './components/PriorityQueue';
 import JourneyFunnel from './components/JourneyFunnel';
+import TicketFunnel from './components/TicketFunnel';
 import CustomerDetail from './components/CustomerDetail';
 
 export default function Dashboard() {
@@ -22,6 +23,7 @@ export default function Dashboard() {
   const [slaCounts, setSlaCounts] = useState({ breached: 0, critical: 0, warning: 0, ok: 0 });
   const [journeyFunnel, setJourneyFunnel] = useState([]);
   const [ticketCount, setTicketCount] = useState(0);
+  const [unrespondedTickets, setUnrespondedTickets] = useState([]);
 
   const fetchData = useCallback(async () => {
     try {
@@ -34,6 +36,7 @@ export default function Dashboard() {
       setSlaCounts(data.slaCounts || {});
       setJourneyFunnel(data.journeyFunnel || []);
       setTicketCount(data.ticketCount || 0);
+      setUnrespondedTickets(data.unrespondedTickets || []);
       setLastUpdated(new Date());
       setError(null);
     } catch (err) {
@@ -143,6 +146,21 @@ export default function Dashboard() {
         >
           Journey Funnel
         </button>
+        <button
+          onClick={() => setTab('tickets')}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-2 ${
+            tab === 'tickets'
+              ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+              : 'bg-dark-card text-gray-500 border border-dark-border hover:text-gray-300'
+          }`}
+        >
+          Ticket Funnel
+          {unrespondedTickets.length > 0 && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30 font-mono">
+              {unrespondedTickets.length}
+            </span>
+          )}
+        </button>
       </div>
 
       {error && (
@@ -163,11 +181,15 @@ export default function Dashboard() {
           journeyFunnel={journeyFunnel}
           onSelect={setSelectedCustomer}
         />
-      ) : (
+      ) : tab === 'funnel' ? (
         <JourneyFunnel
           customers={filtered}
           journeyFunnel={journeyFunnel}
           onSelect={setSelectedCustomer}
+        />
+      ) : (
+        <TicketFunnel
+          unrespondedTickets={unrespondedTickets}
         />
       )}
 
