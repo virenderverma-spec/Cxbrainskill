@@ -1,53 +1,85 @@
 /**
- * Zendesk Sidebar App - CS Copilot
+ * CS Copilot Sidebar v2 — Zero-click contextual copilot
  *
- * Two main functions:
- * 1. Analyze Ticket - Read conversation, perform diagnostic actions, provide context
- * 2. Generate Response - Draft response AFTER actions are done (including interim responses if waiting)
+ * Auto-loads full customer context on ticket open.
+ * Surfaces proactive alerts with executable actions.
+ * Generates humanized responses calibrated by touch count.
  */
 
-// Configuration - Update this to your server URL
-const SERVER_URL = 'http://localhost:3000';
-
-// ZAF Client
+// ── Configuration ──
 var client;
 var currentTicket = {};
-var ticketComments = [];
-var analysisResult = null;
-var actionsPerformed = [];
-var pendingActions = [];
-var generatedResponseText = '';
+var copilotContext = null;
+var generatedDraft = '';
+var diagnosisNoteAdded = false;
 var slaTimerInterval = null;
 
-// Initialize app when Zendesk is ready
+function getServerUrl() {
+  // Try ZAF setting first (set in manifest.json), fallback to localhost
+  if (client) {
+    try {
+      return client.context().then(function(ctx) {
+        return ctx['ticket_sidebar.serverUrl'] || 'http://localhost:3000';
+      }).catch(function() {
+        return 'http://localhost:3000';
+      });
+    } catch (e) { /* fallback */ }
+  }
+  return Promise.resolve('http://localhost:3000');
+}
+
+// ── ZAF-safe HTTP (proxy through Zendesk to avoid mixed content) ──
+
+function zafFetch(url, options) {
+  if (!client) return fetch(url, options);
+  return client.request({
+    url: url,
+    type: (options && options.method) || 'GET',
+    contentType: 'application/json',
+    data: options && options.body ? options.body : undefined,
+    httpCompleteResponse: true,
+  }).then(function(response) {
+    return {
+      ok: response.status >= 200 && response.status < 300,
+      status: response.status,
+      json: function() { return Promise.resolve(typeof response.responseJSON !== 'undefined' ? response.responseJSON : JSON.parse(response.responseText)); },
+    };
+  });
+}
+
+// ── Initialize ──
+
 document.addEventListener('DOMContentLoaded', async function() {
   client = ZAFClient.init();
   client.invoke('resize', { width: '100%', height: '600px' });
 
-  // Load ticket data
+  // Load ticket data then auto-fetch copilot context
   await loadTicketData();
-
-  // Load SLA data
   loadSlaData();
+  fetchCopilotContext();
+
+  // Re-fetch when agent navigates between tickets
+  client.on('ticket.id.changed', async function() {
+    copilotContext = null;
+    diagnosisNoteAdded = false;
+    generatedDraft = '';
+    document.getElementById('draft-area').classList.remove('active');
+    showLoading('Loading customer context...');
+    await loadTicketData();
+    loadSlaData();
+    fetchCopilotContext();
+  });
 });
 
-/**
- * Load all ticket data from Zendesk
- */
+// ── Load ticket metadata from ZAF ──
+
 async function loadTicketData() {
   try {
-    // Get ticket metadata
     var ticketData = await client.get([
-      'ticket.id',
-      'ticket.subject',
-      'ticket.status',
-      'ticket.priority',
-      'ticket.type',
-      'ticket.requester.email',
-      'ticket.requester.name',
-      'ticket.via.channel',
-      'ticket.tags',
-      'ticket.description'
+      'ticket.id', 'ticket.subject', 'ticket.status',
+      'ticket.priority', 'ticket.type',
+      'ticket.requester.email', 'ticket.requester.name',
+      'ticket.via.channel', 'ticket.tags', 'ticket.description'
     ]);
 
     currentTicket = {
@@ -60,497 +92,428 @@ async function loadTicketData() {
       customerName: ticketData['ticket.requester.name'],
       channel: ticketData['ticket.via.channel'],
       tags: ticketData['ticket.tags'] || [],
-      description: ticketData['ticket.description']
+      description: ticketData['ticket.description'],
     };
-
-    // Get all comments/conversation
-    var commentsData = await client.get('ticket.comments');
-    ticketComments = commentsData['ticket.comments'] || [];
-
   } catch (error) {
     console.error('Error loading ticket data:', error);
-    showNotification('Failed to load ticket data', 'error');
   }
 }
 
-/**
- * Format channel name for display
- */
-function formatChannel(channel) {
-  var channelNames = {
-    'email': 'Email',
-    'web': 'Web Form',
-    'sunshine_conversations_api': 'Mochi Chat',
-    'sunshine_conversations_facebook_messenger': 'Facebook Messenger',
-    'instagram_dm': 'Instagram DM',
-    'voice': 'Phone',
-    'chat': 'Live Chat',
-    'api': 'API'
-  };
-  return channelNames[channel] || channel;
-}
+// ── Fetch copilot context from server ──
 
-/**
- * Build conversation text from comments
- */
-function buildConversationText() {
-  if (!ticketComments || ticketComments.length === 0) {
-    return currentTicket.description || 'No conversation available';
-  }
-
-  return ticketComments.map(function(comment) {
-    var author = comment.author ? comment.author.name : 'Unknown';
-    var role = (comment.author && (comment.author.role === 'agent' || comment.author.role === 'admin')) ? 'Agent' : 'Customer';
-    var timestamp = new Date(comment.created_at).toLocaleString();
-    var body = comment.value || comment.body || '';
-
-    return '[' + timestamp + '] ' + role + ' (' + author + '):\n' + body;
-  }).join('\n\n---\n\n');
-}
-
-/**
- * BUTTON 1: Analyze Ticket
- * Reads conversation, PERFORMS ACTIONS (diagnostic API calls), and provides context
- */
-async function analyzeTicket() {
-  showLoading('Reading ticket and performing diagnostics...');
-  disableButtons();
-
-  var conversationText = buildConversationText();
-
-  var prompt = `You are a CS agent assistant for Meow Mobile. Analyze this ticket and PERFORM ALL NECESSARY DIAGNOSTIC ACTIONS.
-
-## Ticket Information
-- **Ticket ID:** ${currentTicket.ticketId}
-- **Subject:** ${currentTicket.subject}
-- **Customer:** ${currentTicket.customerName} (${currentTicket.customerEmail})
-- **Channel:** ${formatChannel(currentTicket.channel)}
-- **Status:** ${currentTicket.status}
-- **Tags:** ${currentTicket.tags.join(', ') || 'None'}
-
-## Conversation:
-${conversationText}
-
----
-
-## YOUR TASK - DO THESE IN ORDER:
-
-### STEP 1: Identify Issue Type
-Determine what the customer's issue is and classify it.
-
-### STEP 2: PERFORM DIAGNOSTIC ACTIONS
-You MUST call the relevant tools to get real data:
-
-**For ALL tickets:**
-- Call get_customer_by_email to get customer account status
-
-**Based on issue type, also call:**
-- eSIM issues → get_esim_status (check provisioning state)
-- Payment issues → get_payment_status (check payment history)
-- Port-In issues → get_portin_status (check port request)
-- Network issues → get_network_outages (check for outages in customer's area)
-- Order issues → get_orders_by_email (check order status)
-
-### STEP 3: Based on results, determine ACTIONS NEEDED
-After getting the data, determine what actions are required:
-
-**Possible actions:**
-- send_esim_instructions - If customer needs help installing eSIM
-- trigger_sim_swap - If eSIM needs to be reprovisioned (CONFIRM FIRST)
-- Process refund - If duplicate charge or eligible for refund
-- Escalate to L2 - If issue requires backend intervention
-- Escalate to Carrier - If port-in stuck or carrier issue
-- Wait for process - If something is in progress (port-in, provisioning)
-
-### STEP 4: Provide Analysis Summary
-
-Format your response as:
-
-## Issue Summary
-[2-3 sentences about the problem]
-
-## Customer Data Retrieved
-| Data Point | Value | Status |
-|------------|-------|--------|
-| Account Status | [value] | [OK/Issue] |
-| eSIM Status | [value] | [OK/Issue] |
-| Payment Status | [value] | [OK/Issue] |
-| etc. | | |
-
-## Diagnosis
-[What's actually wrong based on the data]
-
-## Actions Performed
-- [Action 1] - [Result]
-- [Action 2] - [Result]
-
-## Actions Still Needed
-- [ ] [Action requiring agent confirmation]
-- [ ] [Action requiring customer info]
-
-## Waiting Period (if any)
-[If something is in progress, note the expected wait time]
-
-## Customer Sentiment
-[Frustrated/Neutral/Satisfied] - [brief note]
-
-## Ready for Response
-[Yes - can send final resolution / No - need interim update / Need more info from customer]
-
-BE THOROUGH. Call all relevant tools. The agent needs complete information.`;
+async function fetchCopilotContext() {
+  showLoading('Loading customer context...');
 
   try {
-    var response = await callServer(prompt, 'analyze');
+    var serverUrl = await getServerUrl();
+    var response = await zafFetch(serverUrl + '/api/copilot/context', {
+      method: 'POST',
+      body: JSON.stringify({
+        email: currentTicket.customerEmail,
+        ticketId: currentTicket.ticketId,
+      }),
+    });
 
-    analysisResult = response;
-    displayAnalysis(response);
+    if (!response.ok) throw new Error('Server error: ' + response.status);
+
+    copilotContext = await response.json();
+    renderAll(copilotContext);
+
+    // Auto-add diagnosis note (skip if already added within 30 min)
+    if (!diagnosisNoteAdded) {
+      autoAddDiagnosisNote(copilotContext);
+    }
 
   } catch (error) {
-    console.error('Analysis error:', error);
-    displayError('Failed to analyze ticket. Please try again.');
+    console.error('Copilot context error:', error);
+    hideLoading();
+    document.getElementById('alerts-container').innerHTML =
+      '<div class="error-card"><p>Failed to load customer context</p>' +
+      '<p class="detail">' + escapeHtml(error.message) + '</p></div>';
   }
-
-  hideLoading();
-  enableButtons();
 }
 
-/**
- * BUTTON 2: Generate Response
- * Creates response AFTER actions are done - handles both final and interim responses
- */
-async function generateResponse() {
-  showLoading('Generating response based on completed actions...');
-  disableButtons();
+// ── Render all sections ──
 
-  var conversationText = buildConversationText();
-  var channelType = currentTicket.channel;
-  var isEmail = channelType === 'email' || channelType === 'web';
+function renderAll(ctx) {
+  hideLoading();
+  renderCustomerCard(ctx);
+  renderAlerts(ctx.signals || []);
+  renderContextAccordion(ctx);
+  renderKbSuggestions(ctx.kbArticles || []);
+}
 
-  // Analysis is required before generating response
-  if (!analysisResult) {
-    displayError('Please click "Analyze Ticket" first to perform diagnostic actions.');
-    hideLoading();
-    enableButtons();
+// ── Customer Card ──
+
+function renderCustomerCard(ctx) {
+  var card = document.getElementById('customer-card');
+  var c = ctx.customer || {};
+  var touchCount = ctx.touchCount || 0;
+  var touchClass = touchCount >= 4 ? 'badge-touch-4' : touchCount >= 3 ? 'badge-touch-3' : touchCount >= 2 ? 'badge-touch-2' : 'badge-touch-1';
+  var sentimentClass = ctx.sentiment === 'positive' ? 'badge-sentiment-positive' : ctx.sentiment === 'negative' ? 'badge-sentiment-negative' : 'badge-sentiment-neutral';
+
+  var channelNames = {
+    'email': 'Email', 'web': 'Web', 'sunshine_conversations_api': 'Mochi',
+    'sunshine_conversations_facebook_messenger': 'FB', 'instagram_dm': 'IG',
+    'voice': 'Phone', 'chat': 'Chat', 'api': 'API'
+  };
+  var channelLabel = channelNames[ctx.ticket?.channel] || ctx.ticket?.channel || '';
+
+  card.innerHTML =
+    '<p class="customer-name">' + escapeHtml(c.name || 'Unknown Customer') + '</p>' +
+    '<p class="customer-email">' + escapeHtml(c.email || '') + '</p>' +
+    '<div class="customer-badges">' +
+      '<span class="badge ' + touchClass + '">' + touchCount + ' touch' + (touchCount !== 1 ? 'es' : '') + '</span>' +
+      (ctx.issueType && ctx.issueType !== 'general' ? '<span class="badge badge-issue">' + escapeHtml(ctx.issueType) + '</span>' : '') +
+      (ctx.sentiment && ctx.sentiment !== 'unknown' ? '<span class="badge ' + sentimentClass + '">' + escapeHtml(ctx.sentiment) + '</span>' : '') +
+      (channelLabel ? '<span class="badge badge-channel">' + escapeHtml(channelLabel) + '</span>' : '') +
+    '</div>';
+}
+
+// ── Alerts ──
+
+function renderAlerts(signals) {
+  var container = document.getElementById('alerts-container');
+  if (!signals || signals.length === 0) {
+    container.innerHTML = '';
     return;
   }
 
-  var prompt = `You are a CS agent assistant for Meow Mobile. Generate the appropriate response based on the analysis and actions already performed.
+  container.innerHTML = '<div class="section-header">Alerts</div>' +
+    signals.slice(0, 3).map(function(sig) {
+      var severityClass = sig.severity === 'CRITICAL' ? 'critical' : sig.severity === 'HIGH' ? 'high' : 'medium';
 
-## Ticket Information
-- **Customer:** ${currentTicket.customerName} (${currentTicket.customerEmail})
-- **Channel:** ${formatChannel(currentTicket.channel)} ${isEmail ? '(EMAIL FORMAT)' : '(CHAT FORMAT)'}
+      // Find matching action
+      var action = (copilotContext?.actions || []).find(function(a) {
+        return (sig.id === 'SIG-002' && a.id === 'resend_esim') ||
+               (sig.id === 'SIG-001' && a.id === 'resend_esim') ||
+               (sig.id === 'SIG-005' && a.id === 'retry_port_in') ||
+               (sig.id === 'SIG-004' && a.id === 'retry_port_in');
+      });
 
-## Conversation:
-${conversationText}
+      var actionBtn = action
+        ? '<button class="alert-action-btn" onclick="executeAction(\'' + action.id + '\', ' + escapeHtml(JSON.stringify(action.params || {})) + ')">' + escapeHtml(action.label) + '</button>'
+        : '';
 
-## Analysis & Actions Already Performed:
-${analysisResult}
+      return '<div class="alert-card ' + severityClass + '">' +
+        '<div class="alert-header">' +
+          '<span class="alert-severity">' + sig.severity + '</span>' +
+          '<span class="alert-label">' + escapeHtml(sig.label) + '</span>' +
+        '</div>' +
+        '<div class="alert-detail">' + escapeHtml(sig.detail || '') + '</div>' +
+        actionBtn +
+      '</div>';
+    }).join('');
+}
 
----
+// ── Context Accordion ──
 
-## YOUR TASK: Generate the RIGHT type of response
+function renderContextAccordion(ctx) {
+  var container = document.getElementById('context-accordion');
+  var rows = [];
+  var order = ctx.order || {};
 
-Based on the analysis above, determine which response type is needed:
+  // Order Status
+  var orderStatus = order.status || 'N/A';
+  var orderDot = /completed/i.test(orderStatus) ? 'dot-green' : /error|failed|cancelled/i.test(orderStatus) ? 'dot-red' : 'dot-amber';
+  rows.push(buildAccordionRow('Order Status', orderStatus, orderDot,
+    '<strong>Order ID:</strong> ' + escapeHtml(order.id || 'N/A') + '<br>' +
+    '<strong>Status:</strong> ' + escapeHtml(orderStatus) +
+    (ctx.rca ? '<br><strong>RCA:</strong> ' + escapeHtml(JSON.stringify(ctx.rca).substring(0, 200)) : '')
+  ));
 
-### IF issue is FULLY RESOLVED:
-Generate a **final resolution response** that:
-- Confirms what was done
-- Explains the fix
-- Sets expectations
-- Offers further help
+  // eSIM Status
+  var esimStatus = order.esimStatus || 'N/A';
+  var esimDot = /active|installed/i.test(esimStatus) ? 'dot-green' : /error|failed/i.test(esimStatus) ? 'dot-red' : /pending/i.test(esimStatus) ? 'dot-amber' : 'dot-gray';
+  rows.push(buildAccordionRow('eSIM Status', esimStatus, esimDot,
+    '<strong>eSIM Profile:</strong> ' + escapeHtml(esimStatus)
+  ));
 
-### IF there's a WAITING PERIOD (port-in in progress, eSIM provisioning, etc.):
-Generate an **interim update response** that:
-- Acknowledges their issue
-- Explains what's happening behind the scenes
-- Gives specific timeline (e.g., "Port-ins typically complete within 24-48 hours")
-- Sets expectations for next update
-- Provides interim workaround if available
+  // Port-In Status
+  var portStatus = order.portinStatus || 'N/A';
+  var portDot = /completed|active/i.test(portStatus) ? 'dot-green' : /conflict|failed|rejected/i.test(portStatus) ? 'dot-red' : /pending|submitted/i.test(portStatus) ? 'dot-amber' : 'dot-gray';
+  var portDetail = '<strong>Status:</strong> ' + escapeHtml(portStatus);
+  if (order.portinConflict && order.portinConflict.code) {
+    portDetail += '<br><strong>Conflict ' + escapeHtml(order.portinConflict.code) + ':</strong> ' + escapeHtml(order.portinConflict.reason) +
+      '<br><strong>Action:</strong> ' + escapeHtml(order.portinConflict.action);
+  }
+  rows.push(buildAccordionRow('Port-In', portStatus, portDot, portDetail));
 
-### IF we need MORE INFORMATION from customer:
-Generate an **information request response** that:
-- Acknowledges the issue
-- Explains what we've checked
-- Lists SPECIFIC information needed (not vague)
-- Explains why we need it
+  // Payment
+  var paymentLabel = order.payments && order.payments.length > 0
+    ? 'Paid $' + (order.payments[0].amount || '?')
+    : (order.paymentStatus || 'N/A');
+  var paymentDot = order.payments && order.payments.length > 0 ? 'dot-green' : 'dot-gray';
+  rows.push(buildAccordionRow('Payment', paymentLabel, paymentDot,
+    order.payments && order.payments.length > 0
+      ? order.payments.slice(0, 3).map(function(p) { return escapeHtml(p.status || 'N/A') + ' - $' + escapeHtml(String(p.amount || '?')); }).join('<br>')
+      : 'No payment data available'
+  ));
 
-### IF issue requires ESCALATION:
-Generate an **escalation notification response** that:
-- Acknowledges the complexity
-- Explains it's being escalated to specialists
-- Sets timeline expectation (e.g., "within 24 hours")
-- Assures them they won't need to re-explain
+  // Tickets
+  var th = ctx.ticketHistory || {};
+  rows.push(buildAccordionRow('Tickets', th.open + ' open / ' + th.total + ' total', th.open > 0 ? 'dot-amber' : 'dot-green',
+    (th.tickets || []).map(function(t) {
+      return '#' + t.id + ' ' + escapeHtml(t.subject || '') + ' <em>(' + t.status + ')</em>';
+    }).join('<br>') || 'No open tickets'
+  ));
 
----
+  container.innerHTML = '<div class="section-header">Context</div>' + rows.join('');
+}
 
-## Response Format for ${isEmail ? 'EMAIL' : 'CHAT'}:
+function buildAccordionRow(label, value, dotClass, bodyHtml) {
+  return '<div class="accordion-row" onclick="toggleAccordion(this)">' +
+    '<div class="accordion-header">' +
+      '<span class="accordion-label">' + escapeHtml(label) + '</span>' +
+      '<span class="accordion-value"><span class="status-dot ' + dotClass + '"></span> ' + escapeHtml(value) + ' <span class="accordion-chevron">&#x25B6;</span></span>' +
+    '</div>' +
+    '<div class="accordion-body">' + bodyHtml + '</div>' +
+  '</div>';
+}
 
-${isEmail ? `
-EMAIL FORMAT:
-- Start with "Hi [Name],"
-- Professional but warm tone
-- Use numbered lists for steps
-- Complete and self-contained
-- End with "Best, [Agent Name]\\nMeow Mobile Support"
-` : `
-CHAT FORMAT:
-- Conversational and friendly
-- Concise (can go back-and-forth)
-- Simple language
-- Light emoji okay if appropriate
-`}
+function toggleAccordion(el) {
+  el.classList.toggle('open');
+}
 
----
+// ── KB Suggestions ──
 
-GENERATE ONLY THE RESPONSE TEXT. No additional commentary or explanation.
-The response should directly reflect the actions that were performed in the analysis.`;
+function renderKbSuggestions(articles) {
+  var container = document.getElementById('kb-container');
+  if (!articles || articles.length === 0) {
+    container.innerHTML = '';
+    return;
+  }
+
+  container.innerHTML = '<div class="section-header">KB Articles</div>' +
+    articles.map(function(a) {
+      var url = a.url || '#';
+      return '<a class="kb-link" href="' + escapeHtml(url) + '" target="_blank">' +
+        escapeHtml(a.title) +
+        (a.snippet ? '<div class="kb-snippet">' + escapeHtml(a.snippet.substring(0, 80)) + '</div>' : '') +
+      '</a>';
+    }).join('');
+}
+
+// ── Action Execution ──
+
+async function executeAction(actionId, params) {
+  if (!confirm('Execute: ' + actionId + '?')) return;
+
+  showNotification('Executing action...');
 
   try {
-    var response = await callServer(prompt, 'respond');
+    var serverUrl = await getServerUrl();
+    var response = await zafFetch(serverUrl + '/api/actions', {
+      method: 'POST',
+      body: JSON.stringify({
+        action: actionId,
+        params: params,
+        customerId: copilotContext?.customer?.customerId,
+      }),
+    });
 
-    generatedResponseText = response;
-    displayResponse(response);
+    var result = await response.json();
 
+    if (result.success) {
+      showNotification('Action completed');
+
+      // Auto-add internal note
+      var noteText = '[CS Copilot] Action: ' + actionId + '\n' +
+        'Time: ' + new Date().toISOString() + '\n' +
+        'Result: Success\n' +
+        'Params: ' + JSON.stringify(params);
+      await addInternalNote(noteText);
+
+      // Refresh context
+      fetchCopilotContext();
+    } else {
+      showNotification('Action failed: ' + (result.error || 'Unknown error'), 'error');
+    }
   } catch (error) {
-    console.error('Response generation error:', error);
-    displayError('Failed to generate response. Please try again.');
+    console.error('Action error:', error);
+    showNotification('Action failed: ' + error.message, 'error');
+  }
+}
+
+// ── Draft Generation ──
+
+async function generateDraft() {
+  if (!copilotContext) {
+    showNotification('Context not loaded yet', 'error');
+    return;
   }
 
-  hideLoading();
-  enableButtons();
-}
+  document.getElementById('draft-btn').disabled = true;
+  showNotification('Generating draft...');
 
-/**
- * Call the backend server
- */
-async function callServer(prompt, action) {
-  var response = await fetch(SERVER_URL + '/api/chat', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      message: prompt,
-      ticketId: currentTicket.ticketId,
-      customerEmail: currentTicket.customerEmail,
-      channel: currentTicket.channel,
-      subject: currentTicket.subject,
-      status: currentTicket.status,
-      action: action
-    })
-  });
+  try {
+    var serverUrl = await getServerUrl();
+    var response = await zafFetch(serverUrl + '/api/copilot/generate', {
+      method: 'POST',
+      body: JSON.stringify({
+        context: copilotContext,
+        channel: currentTicket.channel,
+        ticketId: currentTicket.ticketId,
+      }),
+    });
 
-  if (!response.ok) {
-    throw new Error('Server error: ' + response.status);
+    if (!response.ok) throw new Error('Server error: ' + response.status);
+
+    var data = await response.json();
+    generatedDraft = data.draft || '';
+
+    // Show draft
+    var draftArea = document.getElementById('draft-area');
+    var draftBody = document.getElementById('draft-body');
+    var toneBadge = document.getElementById('draft-tone-badge');
+    draftBody.textContent = generatedDraft;
+    toneBadge.textContent = (copilotContext.toneGuide?.tone || 'helpful');
+    draftArea.classList.add('active');
+
+    // Auto-add internal note with diagnosis
+    if (data.internalNote) {
+      await addInternalNote(data.internalNote);
+    }
+
+    showNotification('Draft ready');
+  } catch (error) {
+    console.error('Draft error:', error);
+    showNotification('Draft generation failed: ' + error.message, 'error');
   }
 
-  var data = await response.json();
+  document.getElementById('draft-btn').disabled = false;
+}
 
-  if (data.error) {
-    throw new Error(data.error);
+// ── Insert draft into Zendesk reply editor ──
+
+async function insertDraft() {
+  if (!generatedDraft) return;
+  try {
+    await client.invoke('ticket.editor.insert', generatedDraft);
+    showNotification('Inserted into reply');
+  } catch (error) {
+    console.error('Insert failed:', error);
+    showNotification('Insert failed. Please copy instead.', 'error');
   }
-
-  return data.response;
 }
 
-/**
- * Display analysis results
- */
-function displayAnalysis(content) {
-  var container = document.getElementById('results-container');
-  var emptyState = document.getElementById('empty-state');
+// ── Copy draft ──
 
-  emptyState.style.display = 'none';
-
-  var formattedContent = formatMarkdown(content);
-
-  container.innerHTML =
-    '<div class="result-card">' +
-      '<div class="card-header">' +
-        '<span>📋 Ticket Analysis & Actions</span>' +
-        '<span class="status-badge channel">' + formatChannel(currentTicket.channel) + '</span>' +
-      '</div>' +
-      '<div class="card-body">' +
-        formattedContent +
-      '</div>' +
-      '<div class="card-footer" style="padding: 12px 16px; background: #edf7ff; border-top: 1px solid #d8dcde;">' +
-        '<p style="margin: 0; font-size: 12px; color: #1f73b7;">✓ Analysis complete. Click <strong>Generate Response</strong> to create a reply based on these findings.</p>' +
-      '</div>' +
-    '</div>';
-}
-
-/**
- * Display generated response
- */
-function displayResponse(content) {
-  var container = document.getElementById('results-container');
-  var emptyState = document.getElementById('empty-state');
-
-  emptyState.style.display = 'none';
-
-  // Keep analysis visible, add response below
-  var existingAnalysis = container.querySelector('.result-card');
-  var analysisHtml = existingAnalysis ? existingAnalysis.outerHTML : '';
-
-  container.innerHTML = analysisHtml +
-    '<div class="result-card" style="border-color: #038153;">' +
-      '<div class="card-header" style="background: #edf8f4;">' +
-        '<span>✍️ Response Ready</span>' +
-        '<button class="copy-btn" onclick="copyResponse()">📋 Copy</button>' +
-      '</div>' +
-      '<div class="card-body">' +
-        '<pre style="background: #fff; color: #2f3941; white-space: pre-wrap; font-family: inherit; padding: 0; margin: 0;">' + escapeHtml(content) + '</pre>' +
-        '<button class="insert-btn" onclick="insertResponse()">📝 Insert into Reply Editor</button>' +
-      '</div>' +
-    '</div>';
-}
-
-/**
- * Display error
- */
-function displayError(message) {
-  var container = document.getElementById('results-container');
-  var emptyState = document.getElementById('empty-state');
-
-  emptyState.style.display = 'none';
-
-  container.innerHTML =
-    '<div class="result-card" style="border-color: #e35b66;">' +
-      '<div class="card-header" style="background: #fff0f1; color: #8c232c;">' +
-        '<span>⚠️ Error</span>' +
-      '</div>' +
-      '<div class="card-body">' +
-        '<p>' + message + '</p>' +
-        '<p style="color: #68737d; font-size: 12px;">Please check your server connection and try again.</p>' +
-      '</div>' +
-    '</div>';
-}
-
-/**
- * Copy response to clipboard
- */
-function copyResponse() {
-  var text = generatedResponseText;
-
-  navigator.clipboard.writeText(text).then(function() {
-    var btn = document.querySelector('.copy-btn');
-    btn.textContent = '✓ Copied!';
+function copyDraft() {
+  if (!generatedDraft) return;
+  navigator.clipboard.writeText(generatedDraft).then(function() {
+    var btn = document.getElementById('copy-btn');
+    btn.textContent = 'Copied!';
     btn.classList.add('copied');
-
     setTimeout(function() {
-      btn.textContent = '📋 Copy';
+      btn.textContent = 'Copy';
       btn.classList.remove('copied');
     }, 2000);
   }).catch(function(err) {
     console.error('Copy failed:', err);
-    showNotification('Failed to copy', 'error');
+    showNotification('Copy failed', 'error');
   });
 }
 
-/**
- * Insert response into Zendesk reply editor
- */
-async function insertResponse() {
-  var text = generatedResponseText;
+// ── Internal Note ──
 
+async function addInternalNote(text) {
   try {
-    await client.invoke('ticket.editor.insert', text);
-    showNotification('Response inserted into reply!');
+    await client.request({
+      url: '/api/v2/tickets/' + currentTicket.ticketId + '.json',
+      type: 'PUT',
+      contentType: 'application/json',
+      data: JSON.stringify({
+        ticket: { comment: { body: text, public: false } }
+      }),
+    });
   } catch (error) {
-    console.error('Insert failed:', error);
-    showNotification('Failed to insert. Please copy and paste manually.', 'error');
+    console.error('Internal note error:', error);
   }
 }
 
-/**
- * Format markdown to HTML
- */
-function formatMarkdown(content) {
-  var html = content
-    // Tables
-    .replace(/\|(.+)\|/g, function(match) {
-      var cells = match.split('|').filter(function(c) { return c.trim(); });
-      return '<tr>' + cells.map(function(c) { return '<td style="padding: 4px 8px; border: 1px solid #d8dcde;">' + c.trim() + '</td>'; }).join('') + '</tr>';
-    })
-    // Headers
-    .replace(/^### (.+)$/gm, '<h4 style="margin: 16px 0 8px 0; color: #03363d;">$1</h4>')
-    .replace(/^## (.+)$/gm, '<h3 style="margin: 16px 0 8px 0; color: #1f73b7; border-bottom: 1px solid #d8dcde; padding-bottom: 4px;">$1</h3>')
-    // Checkboxes
-    .replace(/- \[ \] (.+)$/gm, '<div style="margin: 4px 0;"><input type="checkbox" disabled> $1</div>')
-    .replace(/- \[x\] (.+)$/gm, '<div style="margin: 4px 0;"><input type="checkbox" checked disabled> $1</div>')
-    // Bold
-    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-    // Lists
-    .replace(/^- (.+)$/gm, '<li>$1</li>')
-    // Code
-    .replace(/`([^`]+)`/g, '<code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">$1</code>')
-    // Line breaks
-    .replace(/\n\n/g, '</p><p>')
-    .replace(/\n/g, '<br>');
+// ── Auto-diagnosis note ──
 
-  // Wrap in paragraph
-  html = '<p>' + html + '</p>';
+async function autoAddDiagnosisNote(ctx) {
+  if (diagnosisNoteAdded || !ctx || !currentTicket.ticketId) return;
+  diagnosisNoteAdded = true;
 
-  // Wrap consecutive li elements in ul
-  html = html.replace(/(<li>.*?<\/li>)+/g, '<ul style="margin: 8px 0; padding-left: 20px;">$&</ul>');
+  var signals = (ctx.signals || []).map(function(s) { return s.id + ' ' + s.severity; }).join(', ') || 'None';
+  var actions = (ctx.actions || []).map(function(a) { return a.label; }).join(', ') || 'None';
 
-  // Wrap tables
-  html = html.replace(/(<tr>.*?<\/tr>)+/g, '<table style="border-collapse: collapse; margin: 8px 0; font-size: 12px;">$&</table>');
+  var note = '[CS Copilot] Auto-diagnosis:\n' +
+    '- Issue: ' + (ctx.issueType || 'general') + '\n' +
+    '- Touch count: ' + (ctx.touchCount || 0) + (ctx.touchCount >= 3 ? ' (frustrated)' : '') + '\n' +
+    '- Signals: ' + signals + '\n' +
+    '- Suggested: ' + actions + '\n' +
+    '- Order: ' + (ctx.order?.status || 'N/A') + '\n' +
+    '- eSIM: ' + (ctx.order?.esimStatus || 'N/A') + '\n' +
+    '- Port-In: ' + (ctx.order?.portinStatus || 'N/A');
 
-  return html;
+  await addInternalNote(note);
 }
 
-/**
- * Escape HTML for safe display
- */
+// ── Manual diagnosis note button ──
+
+async function addDiagnosisNote() {
+  if (!copilotContext) {
+    showNotification('Context not loaded yet', 'error');
+    return;
+  }
+  diagnosisNoteAdded = false;
+  await autoAddDiagnosisNote(copilotContext);
+  showNotification('Diagnosis note added');
+}
+
+// ── Refresh ──
+
+function refreshContext() {
+  copilotContext = null;
+  diagnosisNoteAdded = false;
+  document.getElementById('draft-area').classList.remove('active');
+  showLoading('Refreshing...');
+  fetchCopilotContext();
+}
+
+// ── Helpers ──
+
 function escapeHtml(text) {
+  if (!text) return '';
   var div = document.createElement('div');
-  div.textContent = text;
+  div.textContent = String(text);
   return div.innerHTML;
 }
 
-/**
- * Show/hide loading state
- */
 function showLoading(message) {
-  document.getElementById('loading').classList.add('active');
-  document.querySelector('.loading-text').textContent = message || 'Loading...';
-  document.getElementById('empty-state').style.display = 'none';
+  var el = document.getElementById('loading');
+  el.classList.add('active');
+  el.querySelector('.loading-text').textContent = message || 'Loading...';
 }
 
 function hideLoading() {
   document.getElementById('loading').classList.remove('active');
 }
 
-/**
- * Enable/disable buttons
- */
-function disableButtons() {
-  document.getElementById('analyze-btn').disabled = true;
-  document.getElementById('respond-btn').disabled = true;
-}
-
-function enableButtons() {
-  document.getElementById('analyze-btn').disabled = false;
-  document.getElementById('respond-btn').disabled = false;
-}
-
-/**
- * Show notification toast
- */
 function showNotification(message, type) {
-  var notification = document.createElement('div');
-  notification.className = 'notification';
-  notification.style.background = type === 'error' ? '#e35b66' : '#038153';
-  notification.textContent = message;
-  document.body.appendChild(notification);
-
-  setTimeout(function() {
-    notification.remove();
-  }, 2500);
+  var n = document.createElement('div');
+  n.className = 'notification';
+  n.style.background = type === 'error' ? '#e35b66' : '#038153';
+  n.textContent = message;
+  document.body.appendChild(n);
+  setTimeout(function() { n.remove(); }, 2500);
 }
 
-// ─── SLA Engine ───────────────────────────────────────────────
+function formatChannel(channel) {
+  var names = {
+    'email': 'Email', 'web': 'Web Form', 'sunshine_conversations_api': 'Mochi Chat',
+    'voice': 'Phone', 'chat': 'Live Chat', 'api': 'API'
+  };
+  return names[channel] || channel;
+}
+
+// ═══════════════════════════════════════════════
+// SLA Engine (preserved from v1, compact rendering)
+// ═══════════════════════════════════════════════
 
 var SLA_TARGETS = {
   L0: {
@@ -574,10 +537,7 @@ var SLA_TARGETS = {
       normal: { partnerResponse: 240, resolution: 4320 },
       low:    { partnerResponse: 480, resolution: null }
     },
-    airvet: {
-      weekday: { resolution: 1440 },
-      weekend: { resolution: 2880 }
-    },
+    airvet: { weekday: { resolution: 1440 }, weekend: { resolution: 2880 } },
     att: {
       urgent: { partnerResponse: null, resolution: null },
       high:   { partnerResponse: null, resolution: null },
@@ -607,7 +567,6 @@ function detectTier(groupName) {
 }
 
 function getSlaTargets(tier, priority, groupName) {
-  // Unassigned tickets follow L0 high priority SLA
   if (!groupName) return SLA_TARGETS.L0.high;
   var p = (priority || 'normal').toLowerCase();
   var t = SLA_TARGETS[tier] || SLA_TARGETS.L1 || SLA_TARGETS.L0;
@@ -650,8 +609,15 @@ function slaStatus(elapsedMs, targetMs) {
 }
 
 function slaTimeText(m) {
-  if (m.immediate) return 'IMMEDIATE — respond now';
-  if (m.met) return 'Met' + (m.elapsedMs > 0 ? ' (' + formatDuration(m.elapsedMs) + ')' : '');
+  if (m.immediate) return 'IMMEDIATE';
+  if (m.met) {
+    var dur = m.elapsedMs > 0 ? formatDuration(m.elapsedMs) : '';
+    if (m.label === '1st Response') {
+      var within = m.targetMs > 0 && m.elapsedMs <= m.targetMs;
+      return (within ? 'Responded' : 'Late') + (dur ? ' (' + dur + ')' : '');
+    }
+    return 'Met' + (dur ? ' (' + dur + ')' : '');
+  }
   if (m.elapsedMs >= m.targetMs) return 'BREACHED ' + formatDuration(m.elapsedMs - m.targetMs) + ' ago';
   return formatDuration(m.targetMs - m.elapsedMs) + ' left';
 }
@@ -661,17 +627,11 @@ function computeNextResponse(comments, requesterId) {
   var agentRepliedAfter = false;
   for (var i = comments.length - 1; i >= 0; i--) {
     var c = comments[i];
-    // ZAF comments have author.role; API comments have author_id
     var isCustomer = c.author ? (c.author.role === 'end-user' || c.author.role === 'end_user') : (c.author_id === requesterId);
     var isPublic = c.public !== false;
     if (!isPublic) continue;
-    if (!lastCustomerMsg && isCustomer) {
-      lastCustomerMsg = c;
-      agentRepliedAfter = false;
-    } else if (lastCustomerMsg && !isCustomer) {
-      agentRepliedAfter = true;
-      break;
-    }
+    if (!lastCustomerMsg && isCustomer) { lastCustomerMsg = c; agentRepliedAfter = false; }
+    else if (lastCustomerMsg && !isCustomer) { agentRepliedAfter = true; break; }
   }
   if (!lastCustomerMsg) return null;
   if (agentRepliedAfter) return { met: true };
@@ -707,9 +667,6 @@ async function findEscalationTimestamp(ticketId) {
   return null;
 }
 
-/**
- * Full SLA data load — fetches ticket, metrics, comments, group, partner field
- */
 async function loadSlaData() {
   var ticketId = currentTicket.ticketId;
   if (!ticketId) return;
@@ -727,7 +684,6 @@ async function loadSlaData() {
     var metrics = results[1].ticket_metric;
     var comments = results[2].comments || [];
 
-    // Detect group & tier
     var groupName = '';
     if (ticket.group_id) {
       try {
@@ -737,7 +693,6 @@ async function loadSlaData() {
     }
     var tier = detectTier(groupName);
 
-    // Detect partner
     var partner = null;
     if (partnerFieldId && ticket.custom_fields) {
       for (var fi = 0; fi < ticket.custom_fields.length; fi++) {
@@ -747,79 +702,61 @@ async function loadSlaData() {
     }
     var partnerName = partner ? (PARTNER_NAMES[partner] || partner) : null;
 
-    // Path
     var path, pathClass;
     var isSolved = ticket.status === 'solved' || ticket.status === 'closed';
-    if (isSolved) {
-      path = 'Solved'; pathClass = 'sla-badge-green';
-    } else if (partner) {
-      path = 'Partner \u2192 ' + partnerName; pathClass = 'sla-badge-purple';
-    } else if (tier !== 'L0') {
-      path = 'Escalated \u2192 ' + tier; pathClass = 'sla-badge-orange';
-    } else {
-      path = 'L0 Direct'; pathClass = 'sla-badge-blue';
-    }
+    if (isSolved) { path = 'Solved'; pathClass = 'sla-badge-green'; }
+    else if (partner) { path = 'Partner \u2192 ' + partnerName; pathClass = 'sla-badge-purple'; }
+    else if (tier !== 'L0') { path = 'Escalated \u2192 ' + tier; pathClass = 'sla-badge-orange'; }
+    else { path = 'L0 Direct'; pathClass = 'sla-badge-blue'; }
 
     // Header gradient
     var header = document.getElementById('app-header');
-    if (isSolved) {
-      header.style.background = 'linear-gradient(135deg, #038153, #025a3a)';
-    } else if (partner) {
-      header.style.background = 'linear-gradient(135deg, #6a27b8, #4a1a80)';
-    } else if (tier !== 'L0') {
-      header.style.background = 'linear-gradient(135deg, #c96400, #8f4700)';
-    } else {
-      header.style.background = 'linear-gradient(135deg, #1f73b7, #144a75)';
-    }
+    if (isSolved) header.style.background = 'linear-gradient(135deg, #038153, #025a3a)';
+    else if (partner) header.style.background = 'linear-gradient(135deg, #6a27b8, #4a1a80)';
+    else if (tier !== 'L0') header.style.background = 'linear-gradient(135deg, #c96400, #8f4700)';
+    else header.style.background = 'linear-gradient(135deg, #1f73b7, #144a75)';
 
     var priority = ticket.priority || 'normal';
     var targets = getSlaTargets(tier, priority, groupName);
     var now = Date.now();
     var createdAt = new Date(ticket.created_at).getTime();
 
-    // ── Build SLA metrics ────────────────────────────────
-
     var slaMetrics = [];
 
-    // 1. First Response
-    var replyMetric = metrics ? metrics.reply_time_in_minutes : null;
-    if (replyMetric) {
-      var replySrc = replyMetric.business || replyMetric.calendar;
-      if (replySrc) {
-        var frTarget = (targets.firstResponse || 60) * 60000;
-        if (replySrc.breach_at) {
-          var ba = new Date(replySrc.breach_at).getTime();
-          var rem = ba - now;
-          slaMetrics.push({ label: '1st Response', targetMs: frTarget, elapsedMs: Math.max(frTarget - Math.max(rem, 0), 0), breachAt: ba, met: false });
-        } else if (replySrc.elapsed !== undefined && replySrc.elapsed !== null) {
-          slaMetrics.push({ label: '1st Response', targetMs: frTarget, elapsedMs: replySrc.elapsed * 60000, breachAt: null, met: true });
-        }
+    // 1st Response
+    var frTarget = (targets.firstResponse || 60) * 60000;
+    var firstAgentReplyAt = null;
+    for (var ci = 0; ci < comments.length; ci++) {
+      var c = comments[ci];
+      var isAgent = c.author ? (c.author.role !== 'end-user' && c.author.role !== 'end_user') : (c.author_id !== ticket.requester_id);
+      if (isAgent && c.public !== false) { firstAgentReplyAt = new Date(c.created_at).getTime(); break; }
+    }
+    if (firstAgentReplyAt) {
+      slaMetrics.push({ label: '1st Response', targetMs: frTarget, elapsedMs: firstAgentReplyAt - createdAt, breachAt: null, met: true });
+    } else {
+      var replyMetric = metrics ? metrics.reply_time_in_minutes : null;
+      var replySrc = replyMetric ? (replyMetric.business || replyMetric.calendar) : null;
+      if (replySrc && replySrc.breach_at) {
+        var ba = new Date(replySrc.breach_at).getTime();
+        slaMetrics.push({ label: '1st Response', targetMs: frTarget, elapsedMs: Math.max(frTarget - Math.max(ba - now, 0), 0), breachAt: ba, met: false });
+      } else {
+        slaMetrics.push({ label: '1st Response', targetMs: frTarget, elapsedMs: now - createdAt, breachAt: createdAt + frTarget, met: false });
       }
     }
-    if (!slaMetrics.length) {
-      var frT = (targets.firstResponse || 60) * 60000;
-      slaMetrics.push({ label: '1st Response', targetMs: frT, elapsedMs: now - createdAt, breachAt: createdAt + frT, met: false });
-    }
 
-    // 2. Next Response
+    // Next Response
     var frMetric = slaMetrics[0];
-    // Treat as breached if elapsed >= 99.5% of target (covers ms-level race)
     var frBreached = frMetric && !frMetric.met && (frMetric.elapsedMs >= frMetric.targetMs || (frMetric.targetMs > 0 && frMetric.elapsedMs / frMetric.targetMs >= 0.995));
     var nextResp = computeNextResponse(comments, ticket.requester_id);
     var nrTarget = (targets.nextResponse || 720) * 60000;
     if (frBreached && (!nextResp || !nextResp.met)) {
-      // 1st response breached → next response is IMMEDIATE
       slaMetrics.push({ label: 'Next Response', targetMs: 0, elapsedMs: 1, breachAt: now, met: false, immediate: true });
     } else if (nextResp) {
-      if (nextResp.met) {
-        slaMetrics.push({ label: 'Next Response', targetMs: nrTarget, elapsedMs: 0, breachAt: null, met: true });
-      } else {
-        var nrEl = now - nextResp.since;
-        slaMetrics.push({ label: 'Next Response', targetMs: nrTarget, elapsedMs: nrEl, breachAt: nextResp.since + nrTarget, met: false });
-      }
+      if (nextResp.met) slaMetrics.push({ label: 'Next Response', targetMs: nrTarget, elapsedMs: 0, breachAt: null, met: true });
+      else { var nrEl = now - nextResp.since; slaMetrics.push({ label: 'Next Response', targetMs: nrTarget, elapsedMs: nrEl, breachAt: nextResp.since + nrTarget, met: false }); }
     }
 
-    // 3. Resolution
+    // Resolution
     var resMetric = metrics ? metrics.full_resolution_time_in_minutes : null;
     var resTarget = (targets.resolution || 2880) * 60000;
     if (resMetric) {
@@ -835,27 +772,23 @@ async function loadSlaData() {
       slaMetrics.push({ label: 'Resolution', targetMs: resTarget, elapsedMs: now - createdAt, breachAt: createdAt + resTarget, met: isSolved });
     }
 
-    // 4. Internal Handoff (L1-3)
+    // Internal Handoff (L1+)
     if (tier !== 'L0' && targets.internalHandoff) {
       var escTs = await findEscalationTimestamp(ticketId);
       if (escTs) {
         var ihTarget = targets.internalHandoff * 60000;
         var ihElapsed = now - escTs;
         var repliedAfterEsc = false;
-        for (var ci = 0; ci < comments.length; ci++) {
-          var ct = new Date(comments[ci].created_at).getTime();
-          var isAgent = comments[ci].author_id !== ticket.requester_id;
-          if (ct > escTs && isAgent && comments[ci].public !== false) {
-            repliedAfterEsc = true;
-            ihElapsed = ct - escTs;
-            break;
-          }
+        for (var ci2 = 0; ci2 < comments.length; ci2++) {
+          var ct = new Date(comments[ci2].created_at).getTime();
+          var isA = comments[ci2].author_id !== ticket.requester_id;
+          if (ct > escTs && isA && comments[ci2].public !== false) { repliedAfterEsc = true; ihElapsed = ct - escTs; break; }
         }
         slaMetrics.push({ label: tier + ' Handoff', targetMs: ihTarget, elapsedMs: ihElapsed, breachAt: repliedAfterEsc ? null : escTs + ihTarget, met: repliedAfterEsc });
       }
     }
 
-    // 5. Partner SLAs
+    // Partner SLAs
     if (partner && SLA_TARGETS.partner[partner]) {
       var pTargets = getPartnerTargets(partner, priority);
       var pStart = await findEscalationTimestamp(ticketId) || createdAt;
@@ -873,10 +806,9 @@ async function loadSlaData() {
       }
     }
 
-    // ── Render ────────────────────────────────────────────
     renderSlaSection(slaMetrics, groupName || 'Unassigned', path, pathClass, tier, priority, isSolved);
 
-    // ── Live countdown ───────────────────────────────────
+    // Live countdown
     if (slaTimerInterval) clearInterval(slaTimerInterval);
     slaTimerInterval = setInterval(function() {
       var n = Date.now();
@@ -885,16 +817,10 @@ async function loadSlaData() {
         m.elapsedMs = m.targetMs - Math.max(m.breachAt - n, 0);
         if (m.elapsedMs > m.targetMs) m.elapsedMs = n - (m.breachAt - m.targetMs);
       });
-      // If 1st response just crossed into breach, flip Next Response to IMMEDIATE
       var fr = slaMetrics[0];
       if (fr && !fr.met && fr.elapsedMs >= fr.targetMs) {
         var nr = slaMetrics.find(function(m) { return m.label === 'Next Response'; });
-        if (nr && !nr.met && !nr.immediate) {
-          nr.immediate = true;
-          nr.targetMs = 0;
-          nr.elapsedMs = 1;
-          nr.breachAt = n;
-        }
+        if (nr && !nr.met && !nr.immediate) { nr.immediate = true; nr.targetMs = 0; nr.elapsedMs = 1; nr.breachAt = n; }
       }
       updateSlaBars(slaMetrics);
     }, 1000);
@@ -908,9 +834,7 @@ async function loadSlaData() {
 function renderSlaSection(metrics, groupName, path, pathClass, tier, priority, isSolved) {
   var container = document.getElementById('sla-content');
   var html = '';
-
-  html += '<div class="sla-group-line">Assigned to: <strong>' + groupName + '</strong></div>';
-
+  html += '<div class="sla-group-line">Assigned to: <strong>' + escapeHtml(groupName) + '</strong></div>';
   html += '<div class="sla-badges">' +
     '<span class="sla-badge ' + pathClass + '">' + path + '</span>' +
     '<span class="sla-badge sla-badge-gray">' + (priority || 'normal').toUpperCase() + '</span>' +
@@ -922,24 +846,24 @@ function renderSlaSection(metrics, groupName, path, pathClass, tier, priority, i
   var coreDone = false;
 
   metrics.forEach(function(m) {
-    if (!coreLabels[m.label] && !coreDone) {
-      html += '<div class="sla-divider"></div>';
-      coreDone = true;
-    }
+    if (!coreLabels[m.label] && !coreDone) { html += '<div class="sla-divider"></div>'; coreDone = true; }
     if (m.placeholder) {
       html += '<div class="sla-metric" data-label="' + m.label + '"><div class="sla-metric-header">' +
         '<span class="sla-metric-label">' + m.label + '</span>' +
-        '<span class="sla-metric-time" style="color:#87929d">Not configured</span>' +
-      '</div></div>';
+        '<span class="sla-metric-time" style="color:#87929d">Not configured</span></div></div>';
       return;
     }
-    var st = m.immediate ? 'breached' : (m.met ? 'met' : slaStatus(m.elapsedMs, m.targetMs));
+    var metBreached = m.met && m.label === '1st Response' && m.targetMs > 0 && m.elapsedMs > m.targetMs;
+    var st = m.immediate ? 'breached' : (metBreached ? 'breached' : (m.met ? 'met' : slaStatus(m.elapsedMs, m.targetMs)));
     var p = m.immediate ? 100 : (m.met ? 100 : slaPct(m.elapsedMs, m.targetMs));
-    // Resolution status label
     var statusLabel = '';
-    if (m.label === 'Resolution' && !m.met) {
+    if (m.label === '1st Response' && m.met) {
+      statusLabel = (m.targetMs > 0 && m.elapsedMs <= m.targetMs)
+        ? ' <span class="sla-status-tag sla-tag-healthy">WITHIN SLA</span>'
+        : ' <span class="sla-status-tag sla-tag-breached">BREACHED</span>';
+    } else if (m.label === 'Resolution' && !m.met) {
       if (m.elapsedMs >= m.targetMs) statusLabel = ' <span class="sla-status-tag sla-tag-breached">BREACHED</span>';
-      else if (slaPct(m.elapsedMs, m.targetMs) > 75) statusLabel = ' <span class="sla-status-tag sla-tag-nearing">NEARING BREACH</span>';
+      else if (slaPct(m.elapsedMs, m.targetMs) > 75) statusLabel = ' <span class="sla-status-tag sla-tag-nearing">NEARING</span>';
       else statusLabel = ' <span class="sla-status-tag sla-tag-healthy">HEALTHY</span>';
     }
     html += '<div class="sla-metric sla-status-' + st + '" data-label="' + m.label + '">' +
@@ -959,17 +883,23 @@ function updateSlaBars(metrics) {
     if (m.placeholder) return;
     var el = document.querySelector('.sla-metric[data-label="' + m.label + '"]');
     if (!el) return;
-    var st = m.immediate ? 'breached' : (m.met ? 'met' : slaStatus(m.elapsedMs, m.targetMs));
+    var metBreached = m.met && m.label === '1st Response' && m.targetMs > 0 && m.elapsedMs > m.targetMs;
+    var st = m.immediate ? 'breached' : (metBreached ? 'breached' : (m.met ? 'met' : slaStatus(m.elapsedMs, m.targetMs)));
     el.className = 'sla-metric sla-status-' + st;
     el.querySelector('.sla-metric-time').textContent = slaTimeText(m);
     el.querySelector('.sla-bar-fill').style.width = (m.immediate ? 100 : (m.met ? 100 : slaPct(m.elapsedMs, m.targetMs))) + '%';
-    // Update resolution status tag
+    if (m.label === '1st Response' && m.met) {
+      var frLabelEl = el.querySelector('.sla-metric-label');
+      frLabelEl.innerHTML = '1st Response' + ((m.targetMs > 0 && m.elapsedMs <= m.targetMs)
+        ? ' <span class="sla-status-tag sla-tag-healthy">WITHIN SLA</span>'
+        : ' <span class="sla-status-tag sla-tag-breached">BREACHED</span>');
+    }
     if (m.label === 'Resolution') {
       var labelEl = el.querySelector('.sla-metric-label');
       var tag = '';
       if (!m.met) {
         if (m.elapsedMs >= m.targetMs) tag = ' <span class="sla-status-tag sla-tag-breached">BREACHED</span>';
-        else if (slaPct(m.elapsedMs, m.targetMs) > 75) tag = ' <span class="sla-status-tag sla-tag-nearing">NEARING BREACH</span>';
+        else if (slaPct(m.elapsedMs, m.targetMs) > 75) tag = ' <span class="sla-status-tag sla-tag-nearing">NEARING</span>';
         else tag = ' <span class="sla-status-tag sla-tag-healthy">HEALTHY</span>';
       }
       labelEl.innerHTML = 'Resolution' + tag;

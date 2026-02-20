@@ -9,6 +9,9 @@ const express = require('express');
 const router = express.Router();
 const Anthropic = require('@anthropic-ai/sdk');
 const { loadAllSkills, detectRelevantSkills, loadSelectedSkills } = require('../lib/skill-loader');
+const boss = require('../lib/boss-api');
+const zendesk = require('../lib/zendesk-client');
+const { runSQL } = require('../lib/databricks');
 
 // Initialize Anthropic client
 const anthropic = new Anthropic({
@@ -296,28 +299,32 @@ async function executeTool(toolName, toolInput) {
 }
 
 /**
- * Placeholder API call functions - replace with actual implementations
+ * API call functions — wired to actual BOSS API, Zendesk, and Databricks libs
  */
 async function callBossAPI(endpoint, method = 'GET', body = null) {
-  // TODO: Implement actual Boss API call
-  // const response = await fetch(`${process.env.BOSS_API_URL}${endpoint}`, {
-  //   method,
-  //   headers: { 'Authorization': `Bearer ${process.env.BOSS_API_TOKEN}` },
-  //   body: body ? JSON.stringify(body) : null
-  // });
-  // return response.json();
-
-  return { message: 'Boss API not yet connected', endpoint };
+  try {
+    const result = await boss.bossRequest(method, endpoint, { body, timeout: 10000 });
+    if (result.success) return result.data;
+    return { error: result.error };
+  } catch (err) {
+    return { error: err.message };
+  }
 }
 
 async function callZendeskAPI(endpoint) {
-  // TODO: Implement actual Zendesk API call
-  return { message: 'Zendesk API not yet connected', endpoint };
+  try {
+    return await zendesk.zendeskRequest(endpoint);
+  } catch (err) {
+    return { error: err.message };
+  }
 }
 
 async function callDatabricksSQL(query) {
-  // TODO: Implement actual Databricks SQL call
-  return { message: 'Databricks not yet connected', query };
+  try {
+    return await runSQL(query);
+  } catch (err) {
+    return { error: err.message };
+  }
 }
 
 /**

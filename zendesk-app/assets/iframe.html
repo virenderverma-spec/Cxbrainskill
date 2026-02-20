@@ -6,9 +6,7 @@
   <title>CS Copilot</title>
 
   <style>
-    * {
-      box-sizing: border-box;
-    }
+    * { box-sizing: border-box; }
 
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -26,315 +24,57 @@
       max-height: 100vh;
     }
 
-    /* Header */
+    /* ── Header ── */
     .header {
-      padding: 12px 16px;
+      padding: 10px 14px;
       background: linear-gradient(135deg, #1f73b7 0%, #144a75 100%);
       color: white;
-    }
-
-    .header h1 {
-      margin: 0;
-      font-size: 16px;
-      font-weight: 600;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    /* Main Actions */
-    .main-actions {
-      display: flex;
-      gap: 12px;
-      padding: 16px;
-      background: #fff;
-      border-bottom: 1px solid #d8dcde;
-    }
-
-    .action-btn {
-      flex: 1;
-      padding: 14px 16px;
-      font-size: 14px;
-      font-weight: 500;
-      border: 2px solid #1f73b7;
-      border-radius: 8px;
-      cursor: pointer;
-      transition: all 0.2s;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 6px;
-    }
-
-    .action-btn.primary {
-      background: #1f73b7;
-      color: #fff;
-    }
-
-    .action-btn.primary:hover {
-      background: #144a75;
-      border-color: #144a75;
-    }
-
-    .action-btn.secondary {
-      background: #fff;
-      color: #1f73b7;
-    }
-
-    .action-btn.secondary:hover {
-      background: #edf7ff;
-    }
-
-    .action-btn:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-
-    .action-btn .icon {
-      font-size: 20px;
-    }
-
-    .action-btn .label {
-      font-size: 12px;
-    }
-
-    /* Content Area */
-    .content-area {
-      flex: 1;
-      overflow-y: auto;
-      padding: 16px;
-      background: #f8f9f9;
-    }
-
-    /* Result Card */
-    .result-card {
-      background: #fff;
-      border: 1px solid #d8dcde;
-      border-radius: 8px;
-      margin-bottom: 12px;
-      overflow: hidden;
-    }
-
-    .result-card .card-header {
-      padding: 12px 16px;
-      background: #f8f9f9;
-      border-bottom: 1px solid #d8dcde;
-      font-weight: 600;
       display: flex;
       justify-content: space-between;
       align-items: center;
     }
-
-    .result-card .card-body {
-      padding: 16px;
-      line-height: 1.6;
+    .header h1 {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 600;
     }
-
-    .result-card h3 {
-      margin: 12px 0 8px 0;
-      font-size: 13px;
-      color: #03363d;
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
     }
-
-    .result-card h3:first-child {
-      margin-top: 0;
-    }
-
-    .result-card ul, .result-card ol {
-      margin: 8px 0;
-      padding-left: 20px;
-    }
-
-    .result-card li {
-      margin-bottom: 4px;
-    }
-
-    .result-card strong {
-      color: #03363d;
-    }
-
-    .result-card code {
-      background: #f5f5f5;
-      padding: 2px 6px;
-      border-radius: 3px;
-      font-family: monospace;
-      font-size: 12px;
-    }
-
-    .result-card pre {
-      background: #2f3941;
-      color: #fff;
-      padding: 12px;
-      border-radius: 6px;
-      overflow-x: auto;
-      margin: 12px 0;
-      font-size: 12px;
-    }
-
-    /* Copy Button */
-    .copy-btn {
-      padding: 6px 12px;
-      font-size: 11px;
-      background: #1f73b7;
-      color: #fff;
+    .refresh-btn {
+      background: rgba(255,255,255,0.15);
       border: none;
+      color: white;
+      padding: 4px 8px;
       border-radius: 4px;
       cursor: pointer;
-      transition: background 0.2s;
-    }
-
-    .copy-btn:hover {
-      background: #144a75;
-    }
-
-    .copy-btn.copied {
-      background: #038153;
-    }
-
-    /* Insert Button */
-    .insert-btn {
-      padding: 8px 16px;
       font-size: 12px;
-      background: #038153;
-      color: #fff;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-      margin-top: 12px;
-      width: 100%;
-      font-weight: 500;
     }
+    .refresh-btn:hover { background: rgba(255,255,255,0.25); }
 
-    .insert-btn:hover {
-      background: #025a3a;
-    }
-
-    /* Loading */
-    .loading {
-      display: none;
-      text-align: center;
-      padding: 40px;
-      color: #68737d;
-    }
-
-    .loading.active {
-      display: block;
-    }
-
-    .spinner {
-      display: inline-block;
-      width: 24px;
-      height: 24px;
-      border: 3px solid #d8dcde;
-      border-top-color: #1f73b7;
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
-    }
-
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
-
-    .loading-text {
-      margin-top: 12px;
-      font-size: 13px;
-    }
-
-    /* Empty State */
-    .empty-state {
-      text-align: center;
-      padding: 40px 20px;
-      color: #68737d;
-    }
-
-    .empty-state .icon {
-      font-size: 40px;
-      margin-bottom: 12px;
-    }
-
-    .empty-state p {
-      margin: 0;
-      font-size: 13px;
-    }
-
-    /* Status Badge */
-    .status-badge {
-      display: inline-block;
-      padding: 2px 8px;
-      font-size: 11px;
-      border-radius: 10px;
-      font-weight: 500;
-    }
-
-    .status-badge.channel {
-      background: #edf7ff;
-      color: #1f73b7;
-    }
-
-    .status-badge.sentiment-negative {
-      background: #fff0f1;
-      color: #8c232c;
-    }
-
-    .status-badge.sentiment-neutral {
-      background: #f8f9f9;
-      color: #68737d;
-    }
-
-    .status-badge.sentiment-positive {
-      background: #edf8f4;
-      color: #038153;
-    }
-
-    /* Action Items */
-    .action-items {
-      background: #fff5e6;
-      border: 1px solid #ffb648;
-      border-radius: 6px;
-      padding: 12px;
-      margin: 12px 0;
-    }
-
-    .action-items h4 {
-      margin: 0 0 8px 0;
-      font-size: 12px;
-      color: #ad5700;
-    }
-
-    .action-items ul {
-      margin: 0;
-      padding-left: 18px;
-    }
-
-    .action-items li {
-      font-size: 12px;
-      margin-bottom: 4px;
-    }
-
-    /* SLA Section */
+    /* ── SLA Strip ── */
     .sla-section {
       background: #fff;
       border-bottom: 1px solid #d8dcde;
-      padding: 12px 16px;
+      padding: 10px 14px;
     }
-
     .sla-group-line {
       font-size: 11px;
       color: #68737d;
-      margin-bottom: 8px;
+      margin-bottom: 6px;
     }
     .sla-group-line strong { color: #2f3941; }
-
     .sla-badges {
       display: flex;
-      gap: 6px;
+      gap: 5px;
       flex-wrap: wrap;
-      margin-bottom: 12px;
+      margin-bottom: 8px;
     }
-
     .sla-badge {
       font-size: 10px;
-      padding: 3px 8px;
+      padding: 2px 7px;
       border-radius: 10px;
       font-weight: 600;
     }
@@ -343,51 +83,19 @@
     .sla-badge-purple  { background: #f3e8ff; color: #6a27b8; }
     .sla-badge-gray    { background: #f0f2f3; color: #68737d; }
     .sla-badge-green   { background: #edf8f4; color: #038153; }
-
-    .sla-divider {
-      height: 1px;
-      background: #e9ebed;
-      margin: 10px 0;
-    }
-
-    .sla-metric {
-      margin-bottom: 10px;
-    }
+    .sla-divider { height: 1px; background: #e9ebed; margin: 8px 0; }
+    .sla-metric { margin-bottom: 8px; }
     .sla-metric:last-child { margin-bottom: 0; }
-
     .sla-metric-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 4px;
+      margin-bottom: 3px;
     }
-
-    .sla-metric-label {
-      font-size: 11px;
-      font-weight: 500;
-      color: #68737d;
-    }
-
-    .sla-metric-time {
-      font-size: 11px;
-      font-weight: 600;
-      font-variant-numeric: tabular-nums;
-    }
-
-    .sla-bar-bg {
-      height: 6px;
-      background: #e9ebed;
-      border-radius: 3px;
-      overflow: hidden;
-    }
-
-    .sla-bar-fill {
-      height: 100%;
-      border-radius: 3px;
-      transition: width 1s linear;
-      min-width: 2px;
-    }
-
+    .sla-metric-label { font-size: 11px; font-weight: 500; color: #68737d; }
+    .sla-metric-time { font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; }
+    .sla-bar-bg { height: 5px; background: #e9ebed; border-radius: 3px; overflow: hidden; }
+    .sla-bar-fill { height: 100%; border-radius: 3px; transition: width 1s linear; min-width: 2px; }
     .sla-status-green .sla-bar-fill { background: #038153; }
     .sla-status-green .sla-metric-time { color: #038153; }
     .sla-status-amber .sla-bar-fill { background: #c96400; }
@@ -399,10 +107,9 @@
     .sla-status-breached .sla-metric-label { color: #cc3340; font-weight: 600; }
     .sla-status-met .sla-bar-fill { background: #038153; }
     .sla-status-met .sla-metric-time { color: #038153; }
-
     .sla-status-tag {
       display: inline-block;
-      padding: 1px 6px;
+      padding: 1px 5px;
       border-radius: 3px;
       font-size: 9px;
       font-weight: 700;
@@ -414,34 +121,295 @@
     .sla-tag-breached { background: #fce4e6; color: #8c232c; }
     .sla-tag-nearing { background: #fff6e5; color: #ad5e00; }
     .sla-tag-healthy { background: #edf8f4; color: #038153; }
+    .sla-no-policy { padding: 6px 0; font-size: 11px; color: #87929d; text-align: center; }
+    @keyframes sla-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
 
-    .sla-no-policy {
-      padding: 8px 0;
+    /* ── Customer Card ── */
+    .customer-card {
+      background: #fff;
+      border-bottom: 1px solid #d8dcde;
+      padding: 10px 14px;
+    }
+    .customer-name {
+      font-size: 14px;
+      font-weight: 600;
+      margin: 0 0 4px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .customer-email { font-size: 12px; color: #68737d; margin: 0 0 6px; }
+    .customer-badges { display: flex; gap: 5px; flex-wrap: wrap; }
+    .badge {
+      font-size: 10px;
+      padding: 2px 7px;
+      border-radius: 10px;
+      font-weight: 600;
+    }
+    .badge-touch-1 { background: #edf7ff; color: #1f73b7; }
+    .badge-touch-2 { background: #fff5e6; color: #c96400; }
+    .badge-touch-3 { background: #fff0f1; color: #8c232c; }
+    .badge-touch-4 { background: #cc3340; color: #fff; }
+    .badge-issue { background: #f3e8ff; color: #6a27b8; }
+    .badge-sentiment-positive { background: #edf8f4; color: #038153; }
+    .badge-sentiment-neutral { background: #f0f2f3; color: #68737d; }
+    .badge-sentiment-negative { background: #fff0f1; color: #8c232c; }
+    .badge-channel { background: #edf7ff; color: #1f73b7; }
+
+    /* ── Scrollable Content ── */
+    .content-area {
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px 14px;
+      padding-bottom: 70px; /* room for sticky bar */
+    }
+
+    /* ── Alerts ── */
+    .alert-card {
+      border-radius: 6px;
+      padding: 10px 12px;
+      margin-bottom: 8px;
+      border-left: 4px solid;
+      background: #fff;
+    }
+    .alert-card.critical { border-left-color: #cc3340; background: #fff0f1; }
+    .alert-card.high { border-left-color: #c96400; background: #fff5e6; }
+    .alert-card.medium { border-left-color: #1f73b7; background: #edf7ff; }
+    .alert-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 4px;
+    }
+    .alert-severity {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+    .alert-card.critical .alert-severity { color: #cc3340; }
+    .alert-card.high .alert-severity { color: #c96400; }
+    .alert-card.medium .alert-severity { color: #1f73b7; }
+    .alert-label { font-size: 12px; font-weight: 600; color: #2f3941; }
+    .alert-detail { font-size: 11px; color: #68737d; margin-bottom: 6px; }
+    .alert-action-btn {
       font-size: 11px;
-      color: #87929d;
+      padding: 4px 10px;
+      border-radius: 4px;
+      border: 1px solid;
+      cursor: pointer;
+      font-weight: 500;
+      background: #fff;
+    }
+    .alert-card.critical .alert-action-btn { border-color: #cc3340; color: #cc3340; }
+    .alert-card.critical .alert-action-btn:hover { background: #cc3340; color: #fff; }
+    .alert-card.high .alert-action-btn { border-color: #c96400; color: #c96400; }
+    .alert-card.high .alert-action-btn:hover { background: #c96400; color: #fff; }
+    .alert-card.medium .alert-action-btn { border-color: #1f73b7; color: #1f73b7; }
+    .alert-card.medium .alert-action-btn:hover { background: #1f73b7; color: #fff; }
+
+    /* ── Section Headers ── */
+    .section-header {
+      font-size: 11px;
+      font-weight: 600;
+      color: #68737d;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin: 12px 0 6px;
+    }
+
+    /* ── Accordion ── */
+    .accordion-row {
+      background: #fff;
+      border: 1px solid #e9ebed;
+      border-radius: 6px;
+      margin-bottom: 4px;
+      overflow: hidden;
+    }
+    .accordion-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 12px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 500;
+    }
+    .accordion-header:hover { background: #f8f9f9; }
+    .accordion-label { color: #68737d; }
+    .accordion-value { font-weight: 600; color: #2f3941; display: flex; align-items: center; gap: 4px; }
+    .accordion-value .status-dot {
+      width: 6px; height: 6px; border-radius: 50%; display: inline-block;
+    }
+    .dot-green { background: #038153; }
+    .dot-red { background: #cc3340; }
+    .dot-amber { background: #c96400; }
+    .dot-gray { background: #87929d; }
+    .accordion-chevron { color: #87929d; font-size: 10px; transition: transform 0.2s; }
+    .accordion-row.open .accordion-chevron { transform: rotate(90deg); }
+    .accordion-body {
+      display: none;
+      padding: 0 12px 10px;
+      font-size: 12px;
+      color: #49545c;
+      line-height: 1.5;
+      border-top: 1px solid #e9ebed;
+    }
+    .accordion-row.open .accordion-body { display: block; }
+
+    /* ── KB Articles ── */
+    .kb-link {
+      display: block;
+      padding: 6px 10px;
+      margin-bottom: 4px;
+      background: #fff;
+      border: 1px solid #e9ebed;
+      border-radius: 6px;
+      font-size: 12px;
+      color: #1f73b7;
+      text-decoration: none;
+      cursor: pointer;
+    }
+    .kb-link:hover { background: #edf7ff; }
+    .kb-snippet { font-size: 11px; color: #68737d; margin-top: 2px; }
+
+    /* ── Draft Area ── */
+    .draft-area {
+      display: none;
+      background: #fff;
+      border: 1px solid #e9ebed;
+      border-radius: 6px;
+      margin-top: 10px;
+      overflow: hidden;
+    }
+    .draft-area.active { display: block; }
+    .draft-header {
+      padding: 8px 12px;
+      background: #edf8f4;
+      border-bottom: 1px solid #e9ebed;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      font-weight: 600;
+      color: #038153;
+    }
+    .draft-body {
+      padding: 12px;
+      font-size: 12px;
+      line-height: 1.6;
+      white-space: pre-wrap;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+    .draft-actions {
+      padding: 8px 12px;
+      border-top: 1px solid #e9ebed;
+      display: flex;
+      gap: 6px;
+    }
+    .btn-sm {
+      font-size: 11px;
+      padding: 5px 12px;
+      border-radius: 4px;
+      border: none;
+      cursor: pointer;
+      font-weight: 500;
+    }
+    .btn-insert { background: #038153; color: #fff; }
+    .btn-insert:hover { background: #025a3a; }
+    .btn-copy { background: #1f73b7; color: #fff; }
+    .btn-copy:hover { background: #144a75; }
+    .btn-copy.copied { background: #038153; }
+
+    /* ── Sticky Bottom Bar ── */
+    .sticky-bar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: #fff;
+      border-top: 1px solid #d8dcde;
+      padding: 10px 14px;
+      display: flex;
+      gap: 8px;
+      z-index: 100;
+    }
+    .sticky-btn {
+      flex: 1;
+      padding: 10px 12px;
+      font-size: 13px;
+      font-weight: 500;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .sticky-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .sticky-btn.primary { background: #1f73b7; color: #fff; }
+    .sticky-btn.primary:hover:not(:disabled) { background: #144a75; }
+    .sticky-btn.secondary { background: #f0f2f3; color: #2f3941; border: 1px solid #d8dcde; }
+    .sticky-btn.secondary:hover:not(:disabled) { background: #e9ebed; }
+
+    /* ── Loading ── */
+    .loading-overlay {
+      display: none;
       text-align: center;
+      padding: 30px 20px;
+      color: #68737d;
     }
-
-    @keyframes sla-pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: .5; }
+    .loading-overlay.active { display: block; }
+    .spinner {
+      display: inline-block;
+      width: 22px; height: 22px;
+      border: 3px solid #d8dcde;
+      border-top-color: #1f73b7;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
     }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-text { margin-top: 8px; font-size: 12px; }
 
-    /* Notification */
+    /* ── Skeleton ── */
+    .skeleton {
+      background: linear-gradient(90deg, #e9ebed 25%, #f0f2f3 50%, #e9ebed 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.5s infinite;
+      border-radius: 4px;
+      height: 14px;
+      margin-bottom: 6px;
+    }
+    .skeleton.w80 { width: 80%; }
+    .skeleton.w60 { width: 60%; }
+    .skeleton.w40 { width: 40%; }
+    .skeleton.tall { height: 40px; }
+    @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+    /* ── Error ── */
+    .error-card {
+      background: #fff0f1;
+      border: 1px solid #e35b66;
+      border-radius: 6px;
+      padding: 12px;
+      margin-bottom: 8px;
+    }
+    .error-card p { margin: 0 0 4px; font-size: 12px; color: #8c232c; }
+    .error-card .detail { font-size: 11px; color: #68737d; }
+
+    /* ── Notification Toast ── */
     .notification {
       position: fixed;
-      bottom: 20px;
+      bottom: 70px;
       left: 50%;
       transform: translateX(-50%);
       background: #038153;
       color: #fff;
-      padding: 10px 20px;
+      padding: 8px 16px;
       border-radius: 6px;
-      font-size: 13px;
+      font-size: 12px;
       animation: fadeInOut 2s ease;
       z-index: 1000;
     }
-
     @keyframes fadeInOut {
       0% { opacity: 0; transform: translateX(-50%) translateY(10px); }
       20% { opacity: 1; transform: translateX(-50%) translateY(0); }
@@ -452,46 +420,64 @@
 </head>
 <body>
   <div class="container">
-    <!-- Header (gradient changes based on ticket path) -->
+    <!-- Header -->
     <div class="header" id="app-header">
-      <h1>🐱 CS Copilot</h1>
+      <h1>CS Copilot</h1>
+      <div class="header-right">
+        <span id="sla-header-badge"></span>
+        <button class="refresh-btn" onclick="refreshContext()" title="Refresh">&#x21bb;</button>
+      </div>
     </div>
 
-    <!-- SLA Section -->
+    <!-- Customer Card (skeleton until loaded) -->
+    <div class="customer-card" id="customer-card">
+      <div class="skeleton w80"></div>
+      <div class="skeleton w60"></div>
+      <div class="skeleton w40"></div>
+    </div>
+
+    <!-- SLA Strip -->
     <div class="sla-section" id="sla-section">
       <div id="sla-content">
-        <div class="sla-no-policy">Loading SLA data...</div>
+        <div class="sla-no-policy">Loading SLA...</div>
       </div>
     </div>
 
-    <!-- Main Actions - Only 2 Buttons -->
-    <div class="main-actions">
-      <button class="action-btn primary" id="analyze-btn" onclick="analyzeTicket()">
-        <span class="icon">🔍</span>
-        <span class="label">Analyze Ticket</span>
-      </button>
-      <button class="action-btn secondary" id="respond-btn" onclick="generateResponse()">
-        <span class="icon">✍️</span>
-        <span class="label">Generate Response</span>
-      </button>
-    </div>
-
-    <!-- Content Area -->
-    <div class="content-area">
-      <!-- Loading State -->
-      <div class="loading" id="loading">
+    <!-- Scrollable Content -->
+    <div class="content-area" id="content-area">
+      <!-- Loading state -->
+      <div class="loading-overlay active" id="loading">
         <div class="spinner"></div>
-        <div class="loading-text">Analyzing ticket...</div>
+        <div class="loading-text">Loading customer context...</div>
       </div>
 
-      <!-- Empty State -->
-      <div class="empty-state" id="empty-state">
-        <div class="icon">📋</div>
-        <p>Click <strong>Analyze Ticket</strong> to get context<br>or <strong>Generate Response</strong> to draft a reply</p>
-      </div>
+      <!-- Alerts -->
+      <div id="alerts-container"></div>
 
-      <!-- Results Container -->
-      <div id="results-container"></div>
+      <!-- Context Accordion -->
+      <div id="context-accordion"></div>
+
+      <!-- KB Articles -->
+      <div id="kb-container"></div>
+
+      <!-- Draft Area -->
+      <div class="draft-area" id="draft-area">
+        <div class="draft-header">
+          <span>Draft Response</span>
+          <span id="draft-tone-badge" class="badge badge-touch-1"></span>
+        </div>
+        <div class="draft-body" id="draft-body"></div>
+        <div class="draft-actions">
+          <button class="btn-sm btn-insert" onclick="insertDraft()">Insert to Reply</button>
+          <button class="btn-sm btn-copy" id="copy-btn" onclick="copyDraft()">Copy</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sticky Bottom Bar -->
+    <div class="sticky-bar">
+      <button class="sticky-btn primary" id="draft-btn" onclick="generateDraft()">Draft Response</button>
+      <button class="sticky-btn secondary" id="note-btn" onclick="addDiagnosisNote()">Internal Note</button>
     </div>
   </div>
 

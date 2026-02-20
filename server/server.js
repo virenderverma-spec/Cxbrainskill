@@ -5,13 +5,17 @@
  * with Claude AI and skill-based knowledge.
  */
 
-require('dotenv').config();
+require('dotenv').config({ path: require('path').join(__dirname, '.env') });
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const chatRouter = require('./routes/chat');
 const reactiveRouter = require('./routes/reactive');
 const slaDashboardRouter = require('./routes/sla-dashboard');
+const healthRouter = require('./routes/health');
+const bossRouter = require('./routes/boss');
+const actionsRouter = require('./routes/actions');
+const copilotRouter = require('./routes/copilot');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -26,13 +30,18 @@ app.use((req, res, next) => {
   next();
 });
 
-// Static files (SLA dashboard HTML)
+// Static files (SLA dashboard HTML + Zendesk app preview)
 app.use(express.static(path.join(__dirname, 'public')));
+app.use('/preview', express.static(path.join(__dirname, '..', 'zendesk-app', 'assets')));
 
 // Routes
 app.use('/api/chat', chatRouter);
 app.use('/api/reactive', reactiveRouter);
 app.use('/api/sla', slaDashboardRouter);
+app.use('/api/health', healthRouter);
+app.use('/api/boss', bossRouter);
+app.use('/api/actions', actionsRouter);
+app.use('/api/copilot', copilotRouter);
 
 // Health check
 app.get('/health', (req, res) => {
