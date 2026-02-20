@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CS Copilot</title>
+  <title>Zara v2.0</title>
 
   <style>
     * { box-sizing: border-box; }
@@ -422,7 +422,7 @@
   <div class="container">
     <!-- Header -->
     <div class="header" id="app-header">
-      <h1>CS Copilot</h1>
+      <h1>Zara v2.0</h1>
       <div class="header-right">
         <span id="sla-header-badge"></span>
         <button class="refresh-btn" onclick="refreshContext()" title="Refresh">&#x21bb;</button>
@@ -483,6 +483,46 @@
 
   <!-- Zendesk Apps Framework SDK -->
   <script src="https://static.zdassets.com/zendesk_app_framework_sdk/2.0/zaf_sdk.min.js"></script>
+
+  <!-- Local preview mock (only activates when ZAF SDK is unavailable) -->
+  <script>
+    if (typeof ZAFClient === 'undefined') {
+      console.log('[Preview Mode] ZAF SDK not available — using mock client');
+      var _mockTicket = {
+        'ticket.id': 99999,
+        'ticket.subject': 'eSIM not working after activation',
+        'ticket.status': 'open',
+        'ticket.priority': 'high',
+        'ticket.type': 'problem',
+        'ticket.requester.email': 'dziabkin@gmail.com',
+        'ticket.requester.name': 'Test Customer',
+        'ticket.via.channel': 'email',
+        'ticket.tags': ['inquiry____esim', 'intent__troubleshooting', 'sentiment__frustrated'],
+        'ticket.description': 'I activated my eSIM but it is not connecting to the network. This is my third time contacting support.'
+      };
+      window.ZAFClient = {
+        init: function() {
+          return {
+            invoke: function() { return Promise.resolve(); },
+            get: function(keys) { return Promise.resolve(_mockTicket); },
+            on: function() {},
+            context: function() { return Promise.resolve({}); },
+            request: function(opts) {
+              return fetch(opts.url, {
+                method: opts.type || 'GET',
+                headers: { 'Content-Type': 'application/json' },
+                body: opts.data
+              }).then(function(r) {
+                return r.json().then(function(json) {
+                  return { status: r.status, responseJSON: json };
+                });
+              });
+            }
+          };
+        }
+      };
+    }
+  </script>
 
   <!-- Main App Script -->
   <script src="main.js"></script>

@@ -1,5 +1,5 @@
 /**
- * CS Copilot Sidebar v2 — Zero-click contextual copilot
+ * Zara Sidebar v2 — Zero-click contextual copilot
  *
  * Auto-loads full customer context on ticket open.
  * Surfaces proactive alerts with executable actions.
@@ -318,7 +318,7 @@ async function executeAction(actionId, params) {
       showNotification('Action completed');
 
       // Auto-add internal note
-      var noteText = '[CS Copilot] Action: ' + actionId + '\n' +
+      var noteText = '[Zara] Action: ' + actionId + '\n' +
         'Time: ' + new Date().toISOString() + '\n' +
         'Result: Success\n' +
         'Params: ' + JSON.stringify(params);
@@ -441,7 +441,7 @@ async function autoAddDiagnosisNote(ctx) {
   var signals = (ctx.signals || []).map(function(s) { return s.id + ' ' + s.severity; }).join(', ') || 'None';
   var actions = (ctx.actions || []).map(function(a) { return a.label; }).join(', ') || 'None';
 
-  var note = '[CS Copilot] Auto-diagnosis:\n' +
+  var note = '[Zara] Auto-diagnosis:\n' +
     '- Issue: ' + (ctx.issueType || 'general') + '\n' +
     '- Touch count: ' + (ctx.touchCount || 0) + (ctx.touchCount >= 3 ? ' (frustrated)' : '') + '\n' +
     '- Signals: ' + signals + '\n' +

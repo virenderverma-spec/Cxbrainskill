@@ -488,7 +488,7 @@ Generate TWO outputs separated by "---INTERNAL_NOTE---":
 
     res.json({
       draft,
-      internalNote: internalNote || `[CS Copilot] Draft generated. Issue: ${context.issueType}. Touch count: ${context.touchCount}. Tone: ${toneGuide.tone}.`,
+      internalNote: internalNote || `[Zara] Draft generated. Issue: ${context.issueType}. Touch count: ${context.touchCount}. Tone: ${toneGuide.tone}.`,
       kbCited,
     });
 
