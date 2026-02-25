@@ -137,9 +137,9 @@ export async function POST(request) {
     const ticketPayload = {
       ticket: {
         subject,
-        comment: { body: finalMessage, public: true },
+        comment: { body: finalMessage, public: false, suppress_notifications: true },
         requester: { name: requesterName, email: requesterEmail },
-        tags: ['proactive_outreach', `stuck_${customer.stuckAt || 'unknown'}`],
+        tags: ['proactive_outreach', 'internal_ticket_created', `stuck_${customer.stuckAt || 'unknown'}`],
         priority: 'normal',
         status: 'open',
       },

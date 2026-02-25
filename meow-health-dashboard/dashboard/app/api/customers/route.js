@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { runSQL } from '../../lib/databricks';
 
 // --- Zendesk API ---
 const ZENDESK_SUBDOMAIN = process.env.ZENDESK_SUBDOMAIN;
@@ -11,10 +12,11 @@ const ZENDESK_AUTH = Buffer.from(`${ZENDESK_EMAIL}/token:${ZENDESK_API_TOKEN}`).
 async function fetchActiveZendeskTickets() {
   if (!ZENDESK_SUBDOMAIN) return [];
   const allTickets = [];
-  // Fetch open/pending/hold tickets and recently solved ones
+  // Fetch all ticket statuses so we can override stale Databricks data
   const queries = [
     'type:ticket status:open status:pending status:hold created>90days',
     'type:ticket status:solved created>30days',
+    'type:ticket status:closed created>30days',
     'type:ticket tags:proactive_outreach created>30days',
   ];
   for (const query of queries) {
@@ -77,90 +79,6 @@ async function lookupZendeskUsers(requesterIds) {
     }
   }
   return emailByRequesterId;
-}
-
-// --- Databricks SQL Statement API ---
-const DATABRICKS_HOST = process.env.DATABRICKS_HOST;
-const DATABRICKS_TOKEN = process.env.DATABRICKS_TOKEN;
-const DATABRICKS_WAREHOUSE_ID = process.env.DATABRICKS_WAREHOUSE_ID;
-
-async function runSQL(sql) {
-  const res = await fetch(`${DATABRICKS_HOST}/api/2.0/sql/statements`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${DATABRICKS_TOKEN}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      warehouse_id: DATABRICKS_WAREHOUSE_ID,
-      statement: sql,
-      wait_timeout: '30s',
-      disposition: 'INLINE',
-      format: 'JSON_ARRAY',
-    }),
-    cache: 'no-store',
-  });
-
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Databricks API error ${res.status}: ${text}`);
-  }
-
-  const data = await res.json();
-
-  // Handle async execution — poll if needed
-  if (data.status?.state === 'PENDING' || data.status?.state === 'RUNNING') {
-    return pollStatement(data.statement_id);
-  }
-
-  if (data.status?.state === 'FAILED') {
-    throw new Error(`SQL failed: ${data.status.error?.message || 'Unknown error'}`);
-  }
-
-  return parseResult(data);
-}
-
-async function pollStatement(statementId) {
-  for (let i = 0; i < 20; i++) {
-    await new Promise(r => setTimeout(r, 1500));
-    const res = await fetch(`${DATABRICKS_HOST}/api/2.0/sql/statements/${statementId}`, {
-      headers: { 'Authorization': `Bearer ${DATABRICKS_TOKEN}` },
-    });
-    const data = await res.json();
-    if (data.status?.state === 'SUCCEEDED') return parseResult(data);
-    if (data.status?.state === 'FAILED') {
-      throw new Error(`SQL failed: ${data.status.error?.message || 'Unknown'}`);
-    }
-  }
-  throw new Error('SQL query timed out after 30s of polling');
-}
-
-function parseResult(data) {
-  const columns = data.manifest?.schema?.columns || [];
-  const rows = data.result?.data_array || [];
-  const colNames = columns.map(c => c.name);
-
-  return rows.map(row => {
-    const obj = {};
-    // HTTP API returns flat arrays: ["val1", "val2", ...]
-    // MCP returns: {values: [{string_value: "val1"}, ...]}
-    if (Array.isArray(row)) {
-      colNames.forEach((name, i) => {
-        obj[name] = row[i] ?? null;
-      });
-    } else {
-      const values = row.values || [];
-      colNames.forEach((name, i) => {
-        const cell = values[i];
-        if (!cell || cell.null_value === 'NULL_VALUE') {
-          obj[name] = null;
-        } else {
-          obj[name] = cell.string_value ?? cell;
-        }
-      });
-    }
-    return obj;
-  });
 }
 
 // --- SQL Queries ---
@@ -262,6 +180,78 @@ ORDER BY t.created_at DESC
 LIMIT 500
 `;
 
+const POST_ONBOARDING_SQL = `
+SELECT
+  c.user_id, c.individual_id, c.customer_id,
+  TRIM(CONCAT(COALESCE(c.given_name, ''), ' ', COALESCE(c.family_name, ''))) as name,
+  c.phone_number, c.stripe_email as email,
+  c.onboarding_status, c.telco_customer_status,
+  c.onboarding_completed_at,
+  c.latest_order_id, c.latest_order_status,
+  c.latest_order_esim_status, c.latest_order_portin_status,
+  c.latest_esim_status,
+  c.is_airvet_activated, c.airvet_activated_at,
+  c.city, c.state as region,
+  c.is_s100_user, c.cat_count,
+  c.certification_created_at,
+  fo.msisdn, fo.imei,
+  DATEDIFF(CURRENT_DATE(), c.onboarding_completed_at) as days_since_completed,
+  CASE
+    WHEN DATEDIFF(CURRENT_DATE(), c.onboarding_completed_at) <= 7 THEN 'first_week'
+    WHEN DATEDIFF(CURRENT_DATE(), c.onboarding_completed_at) <= 30 THEN 'first_month'
+    ELSE 'established'
+  END as lifecycle_phase,
+  ROUND(CAST(
+    (UNIX_TIMESTAMP(CURRENT_TIMESTAMP()) - UNIX_TIMESTAMP(c.onboarding_completed_at)) / 3600.0
+  AS DOUBLE), 1) as stuck_hours,
+  'completed' as stuck_stage,
+  false as esim_error, false as portin_stuck, false as portin_conflict
+FROM prod_catalog.silver.customer_360 c
+LEFT JOIN prod_catalog.silver.fact_order fo ON c.latest_order_id = fo.order_id
+WHERE c.onboarding_status = 'COMPLETED'
+  AND c.onboarding_completed_at >= DATE_SUB(CURRENT_DATE(), 90)
+  AND (
+    c.telco_customer_status IN ('Suspended', 'Cancelled')
+    OR c.telco_customer_status IS NULL
+    OR (c.is_airvet_activated = false
+        AND DATEDIFF(CURRENT_DATE(), c.onboarding_completed_at) > 3)
+  )
+  AND NOT (
+    c.stripe_email LIKE '%@rockstar-automations.com'
+    OR c.stripe_email LIKE '%@gatherat.ai'
+    OR c.stripe_email LIKE '%@meow-mobile.co'
+    OR c.stripe_email LIKE 'cjrunner%'
+    OR c.stripe_email LIKE 'care.helpoff%'
+    OR c.stripe_email LIKE 'tester%@gatherat.ai'
+    OR LOWER(COALESCE(c.family_name, '')) = 'meow'
+  )
+ORDER BY c.onboarding_completed_at DESC
+LIMIT 200
+`;
+
+const PAYMENT_FAILURES_SQL = `
+SELECT
+  fc.stripe_customer_id,
+  fc.failure_code,
+  fc.outcome_type,
+  fc.charge_amount,
+  fc.charge_created_at,
+  fc.customer_delinquent,
+  fc.intent_status
+FROM prod_catalog.silver.fact_charges fc
+WHERE fc.is_latest_charge = true
+  AND fc.charge_status = 'failed'
+  AND fc.charge_created_at >= DATE_SUB(CURRENT_DATE(), 30)
+`;
+
+// Stuck thresholds per stage (hours) — below this, customers are still progressing normally
+const STUCK_THRESHOLDS = {
+  number_selection: 1,
+  esim_activation: 1,
+  nw_enabled: 1,
+  airvet_account: 3,
+};
+
 // --- Tag Parsing ---
 
 function parseTags(tagsStr) {
@@ -357,6 +347,73 @@ const JOURNEY_STAGES = [
   { id: 'nw_enabled', label: 'NW Enabled', order: 5 },
   { id: 'airvet_account', label: 'Airvet Account', order: 6 },
 ];
+
+// --- CIS (Customer Issue Scenarios) assignment ---
+
+function assignCisScenario(customer) {
+  const stuckAt = customer.stuckAt;
+  const stuckHours = customer.stuckHours || 0;
+  const esimStatus = customer.esimStatus;
+  const portinStatus = customer.portinStatus;
+  const telcoStatus = customer.telcoStatus;
+  const issueTags = customer.issueTags || [];
+  const isSilent = issueTags.includes('Silent Stuck') || (customer.isSilent && stuckHours > 720);
+
+  // Post-onboarding customers
+  if (stuckAt === 'completed') {
+    if (!telcoStatus || telcoStatus === 'NULL') {
+      return { journeyStage: 'post_onboarding', milestone: 'activation', issueBucket: 'Incomplete Activation', cisNumber: 31 };
+    }
+    if (telcoStatus === 'Suspended') {
+      return { journeyStage: 'post_onboarding', milestone: 'service_issues', issueBucket: 'Service Resumed but Not Working', cisNumber: 27 };
+    }
+    if (telcoStatus === 'Cancelled') {
+      return { journeyStage: 'post_onboarding', milestone: 'service_issues', issueBucket: 'Service Resumed but Not Working', cisNumber: 28 };
+    }
+    return { journeyStage: 'others', milestone: null, issueBucket: 'Uncategorized', cisNumber: null };
+  }
+
+  if (stuckAt === 'order_created') {
+    if (isSilent || stuckHours > 720) {
+      return { journeyStage: 'onboarding', milestone: 'order_created', issueBucket: 'Silent Churn', cisNumber: 30 };
+    }
+    return { journeyStage: 'onboarding', milestone: 'order_created', issueBucket: 'Order Abandoned', cisNumber: 29 };
+  }
+
+  if (stuckAt === 'payment') {
+    return { journeyStage: 'onboarding', milestone: 'payment', issueBucket: 'Payment not completed', cisNumber: 6 };
+  }
+
+  if (stuckAt === 'number_selection') {
+    if (portinStatus === 'CONFLICT' || portinStatus === 'REVIEWING') {
+      return { journeyStage: 'onboarding', milestone: 'number_selection', issueBucket: 'New Number / Port-In', cisNumber: 10 };
+    }
+    return { journeyStage: 'onboarding', milestone: 'number_selection', issueBucket: 'New Number / Port-In', cisNumber: 11 };
+  }
+
+  if (stuckAt === 'esim_activation') {
+    if (portinStatus === 'CONFLICT') {
+      return { journeyStage: 'onboarding', milestone: 'number_selection', issueBucket: 'New Number / Port-In', cisNumber: 10 };
+    }
+    if (esimStatus === 'ERROR' || esimStatus === 'FAILED') {
+      return { journeyStage: 'onboarding', milestone: 'esim_activation', issueBucket: 'eSIM Activation Stuck', cisNumber: 16 };
+    }
+    return { journeyStage: 'onboarding', milestone: 'esim_activation', issueBucket: 'eSIM not Downloaded', cisNumber: 14 };
+  }
+
+  if (stuckAt === 'nw_enabled') {
+    return { journeyStage: 'onboarding', milestone: 'esim_activation', issueBucket: 'eSIM Activation Stuck', cisNumber: 16 };
+  }
+
+  if (stuckAt === 'airvet_account') {
+    if (esimStatus === 'ERROR' || esimStatus === 'FAILED') {
+      return { journeyStage: 'onboarding', milestone: 'esim_activation', issueBucket: 'eSIM Activation Stuck', cisNumber: 16 };
+    }
+    return { journeyStage: 'others', milestone: null, issueBucket: 'Uncategorized', cisNumber: null };
+  }
+
+  return { journeyStage: 'others', milestone: null, issueBucket: 'Uncategorized', cisNumber: null };
+}
 
 // --- Health scoring ---
 
@@ -600,15 +657,191 @@ async function findUnrespondedTickets(tickets, emailByRequesterId) {
   return unresponded;
 }
 
+// --- Proactive Ticket Auto-Creation ---
+
+const PROACTIVE_BATCH_SIZE = 5;
+
+function proactivePriorityFromCategory(healthCategory) {
+  switch (healthCategory) {
+    case 'critical': return 'urgent';
+    case 'high': return 'high';
+    case 'medium': return 'normal';
+    case 'low': return 'low';
+    default: return 'normal';
+  }
+}
+
+function proactiveSubject(customer) {
+  const firstName = (customer.name || 'Customer').split(' ')[0];
+  const subjects = {
+    order_created: `${firstName}, we noticed your Meow Mobile order needs attention`,
+    payment: `${firstName}, let's get your Meow Mobile payment sorted`,
+    number_selection: `${firstName}, your number transfer is in progress`,
+    esim_activation: `${firstName}, we're working on your eSIM activation`,
+    nw_enabled: `${firstName}, let's get your network up and running`,
+    airvet_account: `${firstName}, one last step — setting up your Airvet account`,
+  };
+  return subjects[customer.stuckAt] || `${firstName}, we're here to help with your Meow Mobile setup`;
+}
+
+function proactiveTags(customer) {
+  const tags = ['proactive_outreach', 'internal_ticket_created'];
+  if (customer.stuckAt) tags.push(`stuck_${customer.stuckAt}`);
+  if (customer.esimStatus === 'ERROR' || customer.esimStatus === 'FAILED') tags.push('esim_error');
+  if (customer.portinStatus === 'CONFLICT') tags.push('portin_conflict');
+  if (customer.portinStatus === 'REVIEWING') tags.push('portin_reviewing');
+  const issueTags = customer.issueTags || [];
+  if (issueTags.includes('Churn Risk')) tags.push('churn_risk');
+  if (issueTags.includes('Silent Stuck')) tags.push('silent_stuck');
+  if (issueTags.includes('Payment Stuck')) tags.push('payment_stuck');
+  if (issueTags.includes('MNP Conflict')) tags.push('mnp_conflict');
+  if (issueTags.includes('MNP Stuck')) tags.push('mnp_stuck');
+  if (issueTags.includes('eSIM Failed')) tags.push('esim_failed');
+  if (issueTags.includes('Airvet Pending')) tags.push('airvet_pending');
+  if (customer.healthCategory) tags.push(`health_${customer.healthCategory}`);
+  return tags;
+}
+
+function proactiveInternalNote(customer) {
+  const stuckDays = customer.stuckHours ? Math.round(customer.stuckHours / 24) : 0;
+  let note = `## Proactive Health Alert\n`;
+  note += `**Customer:** ${customer.name || 'Unknown'} (${customer.email || 'no email'})\n`;
+  note += `**Health Score:** ${customer.healthScore}/100 (${customer.healthCategory})\n`;
+  note += `**Stuck at:** ${customer.stuckStage || customer.stuckAt} for ${stuckDays}d (${Math.round(customer.stuckHours || 0)}h)\n\n`;
+  note += `### Customer Journey Snapshot\n`;
+  note += `- **Order:** ${customer.latestOrderId || 'N/A'} — ${customer.latestOrderStatus || 'N/A'}\n`;
+  note += `- **eSIM:** ${customer.esimStatus || 'N/A'}\n`;
+  note += `- **Port-in:** ${customer.portinStatus || 'N/A'}\n`;
+  note += `- **Telco:** ${customer.telcoStatus || 'N/A'}\n`;
+  note += `- **MSISDN:** ${customer.msisdn || 'N/A'}\n\n`;
+  if (customer.issueTags?.length > 0) {
+    note += `### Issue Signals\n`;
+    for (const tag of customer.issueTags) note += `- ${tag}\n`;
+    note += '\n';
+  }
+  if (customer.recommendedAction) {
+    note += `### Recommended Action\n${customer.recommendedAction}\n\n`;
+  }
+  note += `### ConnectX Actions Available\n`;
+  if (customer.esimStatus === 'ERROR' || customer.esimStatus === 'FAILED') note += `- [ ] Re-issue eSIM (SIM Swap) via BOSS API\n`;
+  if (customer.portinStatus === 'CONFLICT' || customer.portinStatus === 'REVIEWING') note += `- [ ] Retry Port-In after obtaining correct details\n`;
+  if (customer.stuckHours > 48) note += `- [ ] Cancel Order if customer unresponsive\n`;
+  note += `- [ ] Contact customer to assist with ${customer.stuckStage || 'setup'}\n`;
+  return note;
+}
+
+async function zendeskSearchOpenTickets(email) {
+  if (!ZENDESK_SUBDOMAIN || !email) return [];
+  try {
+    const query = encodeURIComponent(`type:ticket requester:${email} -status:solved -status:closed`);
+    const res = await fetch(
+      `https://${ZENDESK_SUBDOMAIN}.zendesk.com/api/v2/search.json?query=${query}&sort_by=created_at&sort_order=desc`,
+      { headers: { 'Authorization': `Basic ${ZENDESK_AUTH}` }, cache: 'no-store' }
+    );
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.results || [];
+  } catch (err) {
+    console.error(`Zendesk open ticket search error for ${email}:`, err.message);
+    return [];
+  }
+}
+
+async function zendeskCreateTicketWithNote({ email, name, subject, internalNote, tags, priority }) {
+  if (!ZENDESK_SUBDOMAIN) return null;
+  const ticket = {
+    subject,
+    priority: priority || 'normal',
+    status: 'open',
+    tags: tags || [],
+    comment: { body: internalNote, public: false, suppress_notifications: true },
+    requester: { email, name: name || email },
+  };
+  const res = await fetch(
+    `https://${ZENDESK_SUBDOMAIN}.zendesk.com/api/v2/tickets.json`,
+    {
+      method: 'POST',
+      headers: { 'Authorization': `Basic ${ZENDESK_AUTH}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ticket }),
+    }
+  );
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Zendesk ticket creation failed (${res.status}): ${errText}`);
+  }
+  const data = await res.json();
+  return data.ticket;
+}
+
+async function autoCreateProactiveTickets(customers) {
+  // Filter: no active (non-solved, non-closed) tickets and has email
+  const eligible = customers.filter(c => c.activeTicketCount === 0 && c.email);
+  const created = [];
+  const skipped = [];
+  const errors = [];
+
+  // Dedup: per-customer Zendesk search for any open ticket (catches pagination gaps)
+  const dedupResults = await Promise.allSettled(
+    eligible.map(async (c) => {
+      const openTickets = await zendeskSearchOpenTickets(c.email);
+      if (openTickets.length > 0) {
+        return { customer: c, skip: true, reason: 'Existing open ticket #' + openTickets[0].id, latestTicketId: String(openTickets[0].id), latestTicketSubject: openTickets[0].subject };
+      }
+      return { customer: c, skip: false };
+    })
+  );
+
+  const toCreate = [];
+  for (const result of dedupResults) {
+    if (result.status === 'fulfilled') {
+      if (result.value.skip) {
+        skipped.push({ email: result.value.customer.email, name: result.value.customer.name, reason: result.value.reason, latestTicketId: result.value.latestTicketId, latestTicketSubject: result.value.latestTicketSubject });
+      } else {
+        toCreate.push(result.value.customer);
+      }
+    }
+  }
+
+  // Create tickets in batches
+  for (let i = 0; i < toCreate.length; i += PROACTIVE_BATCH_SIZE) {
+    const batch = toCreate.slice(i, i + PROACTIVE_BATCH_SIZE);
+    const results = await Promise.allSettled(
+      batch.map(async (customer) => {
+        const ticket = await zendeskCreateTicketWithNote({
+          email: customer.email,
+          name: customer.name,
+          subject: proactiveSubject(customer),
+          internalNote: proactiveInternalNote(customer),
+          tags: proactiveTags(customer),
+          priority: proactivePriorityFromCategory(customer.healthCategory),
+        });
+        return { customer, ticket };
+      })
+    );
+    for (let j = 0; j < results.length; j++) {
+      if (results[j].status === 'fulfilled') {
+        created.push({ ticketId: results[j].value.ticket.id, email: results[j].value.customer.email, name: results[j].value.customer.name, healthCategory: results[j].value.customer.healthCategory });
+      } else {
+        errors.push({ email: batch[j]?.email, name: batch[j]?.name, error: results[j].reason?.message || 'Unknown error' });
+      }
+    }
+  }
+
+  console.log(`Proactive tickets: ${created.length} created, ${skipped.length} skipped, ${errors.length} errors`);
+  return { created, skipped, errors };
+}
+
 // --- Main API Handler ---
 
 export async function GET() {
   try {
     // Run Databricks queries + Zendesk live ticket search in parallel
-    const [stuckCustomers, ticketRows, liveZendeskTickets] = await Promise.all([
+    const [stuckCustomers, ticketRows, liveZendeskTickets, postOnboardingCustomers, paymentFailures] = await Promise.all([
       runSQL(STUCK_CUSTOMERS_SQL),
       runSQL(ZENDESK_TICKETS_SQL),
       fetchActiveZendeskTickets(),
+      runSQL(POST_ONBOARDING_SQL).catch(err => { console.error('Post-onboarding SQL error:', err.message); return []; }),
+      runSQL(PAYMENT_FAILURES_SQL).catch(err => { console.error('Payment failures SQL error:', err.message); return []; }),
     ]);
 
     // Deduplicate tickets (Databricks may have multiple rows per ticket from incremental syncs)
@@ -654,7 +887,9 @@ export async function GET() {
       }
     }
 
-    const tickets = [...ticketMap.values()];
+    // Exclude closed tickets — Databricks may have stale statuses for tickets
+    // that were closed after the last sync
+    const tickets = [...ticketMap.values()].filter(t => t.status !== 'closed');
 
     // Look up Zendesk user emails for all unique requester_ids
     const uniqueRequesterIds = [...new Set(tickets.map(t => t.requester_id).filter(Boolean))];
@@ -669,6 +904,25 @@ export async function GET() {
       ticketsByEmail[email].push(t);
     }
 
+    // Build solved proactive ticket lookup for stale data override
+    const solvedProactiveByEmail = {};
+    for (const t of tickets) {
+      if ((t.status === 'solved' || t.status === 'closed') && (t.tags || []).includes('proactive_outreach')) {
+        const email = emailByRequesterId[t.requester_id];
+        if (!email) continue;
+        if (!solvedProactiveByEmail[email]) solvedProactiveByEmail[email] = [];
+        solvedProactiveByEmail[email].push(t);
+      }
+    }
+
+    // Build payment failure lookup by stripe_customer_id
+    const paymentFailureMap = {};
+    for (const pf of paymentFailures) {
+      if (pf.stripe_customer_id) {
+        paymentFailureMap[pf.stripe_customer_id] = pf;
+      }
+    }
+
     // Build customer records
     const severityCounts = { critical: 0, high: 0, medium: 0, low: 0, healthy: 0 };
     const slaCounts = { breached: 0, critical: 0, warning: 0, ok: 0 };
@@ -679,10 +933,33 @@ export async function GET() {
       const portinStuck = c.portin_stuck === 'true' || c.portin_stuck === true;
       const portinConflict = c.portin_conflict === 'true' || c.portin_conflict === true;
 
+      // Stale data override: suppress eSIM error if solved proactive ticket with esim tag exists
+      let effectiveEsimError = esimError;
+      const custEmail = (c.email || '').toLowerCase();
+      if (esimError && custEmail) {
+        const solvedTickets = solvedProactiveByEmail[custEmail] || [];
+        if (solvedTickets.some(t => (t.tags || []).some(tag => tag.includes('esim')))) {
+          effectiveEsimError = false;
+        }
+      }
+
+      // Error vs stuck classification
+      const hasError = effectiveEsimError || portinConflict || portinStuck || c.latest_order_esim_status === 'FAILED';
+      const stuckThreshold = STUCK_THRESHOLDS[c.stuck_stage];
+      const isPrePayment = ['order_created', 'payment'].includes(c.stuck_stage);
+      let customerType = null; // null = exclude (not actionable)
+      if (isPrePayment) {
+        // Pre-payment: only show if there's a payment failure or error ticket
+        if (paymentFailureMap[c.customer_id]) customerType = 'error';
+      } else {
+        if (hasError) customerType = 'error';
+        else if (stuckThreshold && stuckHours > stuckThreshold) customerType = 'stuck';
+      }
+
       const customerData = {
         ...c,
         stuck_hours: stuckHours,
-        esim_error: esimError,
+        esim_error: effectiveEsimError,
         portin_stuck: portinStuck,
         portin_conflict: portinConflict,
       };
@@ -746,21 +1023,110 @@ export async function GET() {
         slaStatus,
         issueTags,
         recommendedAction,
+        // Classification
+        customerType,
         // Enrichment
         isS100: c.is_s100_user === 'true' || c.is_s100_user === true,
         catCount: parseInt(c.cat_count) || 0,
         signedUpAt: c.certification_created_at,
-        // Tickets (empty for now — no join key between ZD requester_id and customer_360)
+        // Tickets
         tickets: customerTickets,
         ticketCount: customerTickets.length,
+        activeTicketCount: customerTickets.filter(t => ['new', 'open', 'pending', 'hold'].includes(t.status)).length,
+        latestTicketId: customerTickets.length > 0 ? customerTickets[0].id : null,
+        latestTicketSubject: customerTickets.length > 0 ? customerTickets[0].subject : null,
         isSilent: customerTickets.length === 0,
         issueSince: c.certification_created_at,
         contacts: { agent: 0, mochi: 0 },
       };
     });
 
+    // Assign CIS scenario to each customer (needs issueTags to be set first)
+    for (const c of customers) {
+      c.cisScenario = assignCisScenario(c);
+    }
+
     // Sort by health score (worst first)
     customers.sort((a, b) => a.healthScore - b.healthScore);
+
+    // Process post-onboarding at-risk customers
+    const postOnboarding = postOnboardingCustomers.map(c => {
+      const custEmail = (c.email || '').toLowerCase();
+      const allCustTickets = custEmail ? (ticketsByEmail[custEmail] || []) : [];
+      const custTickets = allCustTickets
+        .filter(t => ['new', 'open', 'pending', 'hold', 'solved'].includes(t.status))
+        .sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
+      const stuckHours = parseFloat(c.stuck_hours) || 0;
+      const customerData = { ...c, stuck_hours: stuckHours, esim_error: false, portin_stuck: false, portin_conflict: false };
+      const healthScore = computeHealthScore(customerData, custTickets);
+      const healthCategory = categorize(healthScore);
+      const hasPaymentFailure = !!paymentFailureMap[c.customer_id];
+      const pf = paymentFailureMap[c.customer_id];
+
+      const issueTags = [];
+      if (c.telco_customer_status === 'Suspended') issueTags.push('Suspended');
+      else if (c.telco_customer_status === 'Cancelled') issueTags.push('Cancelled');
+      else if (!c.telco_customer_status) issueTags.push('Incomplete Activation');
+      if (hasPaymentFailure) issueTags.push(pf.failure_code ? `Payment Failed (${pf.failure_code})` : 'Payment Failed');
+      if (pf?.customer_delinquent === 'true' || pf?.customer_delinquent === true) issueTags.push('Delinquent');
+      if ((c.is_airvet_activated === 'false' || c.is_airvet_activated === false) && (parseInt(c.days_since_completed) || 0) > 3) issueTags.push('Airvet Pending');
+
+      let recommendedAction = 'Review post-onboarding status.';
+      if (hasPaymentFailure) recommendedAction = 'Contact customer to update payment method.';
+      else if (c.telco_customer_status === 'Suspended') recommendedAction = 'Review suspension reason and contact customer.';
+      else if (!c.telco_customer_status) recommendedAction = 'Investigate why telco account not activated.';
+
+      return {
+        id: c.user_id || c.individual_id || c.customer_id,
+        name: c.name || 'Unknown',
+        email: c.email,
+        phone: c.phone_number,
+        telcoStatus: c.telco_customer_status,
+        stuckAt: 'completed',
+        stuckStage: 'Post-Onboarding',
+        stuckHours,
+        healthScore,
+        healthCategory,
+        issueTags,
+        recommendedAction,
+        customerType: (c.telco_customer_status === 'Suspended' || c.telco_customer_status === 'Cancelled' || hasPaymentFailure) ? 'error' : 'stuck',
+        lifecyclePhase: c.lifecycle_phase,
+        daysSinceCompleted: parseInt(c.days_since_completed) || 0,
+        tickets: custTickets,
+        ticketCount: custTickets.length,
+        activeTicketCount: custTickets.filter(t => ['new', 'open', 'pending', 'hold'].includes(t.status)).length,
+        latestTicketId: custTickets.length > 0 ? custTickets[0].id : null,
+        latestTicketSubject: custTickets.length > 0 ? custTickets[0].subject : null,
+        latestOrderId: c.latest_order_id,
+        latestOrderStatus: c.latest_order_status,
+        esimStatus: c.latest_order_esim_status,
+        portinStatus: c.latest_order_portin_status,
+        msisdn: c.msisdn,
+      };
+    });
+
+    // Assign CIS scenario to each post-onboarding customer
+    for (const c of postOnboarding) {
+      c.cisScenario = assignCisScenario(c);
+    }
+
+    // Auto-create proactive tickets for ALL customers (onboarding + post-onboarding) with no active tickets
+    const allForTickets = [...customers, ...postOnboarding];
+    let proactiveTickets = { created: [], skipped: [], errors: [] };
+    if (ZENDESK_SUBDOMAIN) {
+      try {
+        proactiveTickets = await autoCreateProactiveTickets(allForTickets);
+        // Mark customers with newly created tickets
+        const createdEmails = new Set(proactiveTickets.created.map(t => t.email?.toLowerCase()));
+        for (const c of customers) {
+          if (createdEmails.has(c.email?.toLowerCase())) {
+            c.proactiveTicketCreated = true;
+          }
+        }
+      } catch (err) {
+        console.error('Proactive ticket creation error:', err.message);
+      }
+    }
 
     // Journey funnel summary
     const journeyFunnel = JOURNEY_STAGES.map(stage => {
@@ -792,6 +1158,8 @@ export async function GET() {
       journeyFunnel,
       recentTickets: unmatchedTickets,
       unrespondedTickets,
+      proactiveTickets,
+      postOnboarding: postOnboarding.length > 0 ? postOnboarding : undefined,
       ticketCount: tickets.length,
       fetchedAt: new Date().toISOString(),
       source: 'databricks',
