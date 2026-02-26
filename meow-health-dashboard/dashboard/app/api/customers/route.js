@@ -244,6 +244,35 @@ WHERE fc.is_latest_charge = true
   AND fc.charge_created_at >= DATE_SUB(CURRENT_DATE(), 30)
 `;
 
+// --- Call Drop Detection (CIS #24) ---
+// Tier 1: Detect from Zendesk ticket subjects/tags (customers who *report* call drops)
+const CALL_DROP_KEYWORDS = ['call drop', 'calls dropping', 'dropped call', 'call keeps dropping', 'calls keep dropping', 'call disconnects', 'call cuts off', 'call cut off'];
+
+function hasCallDropSignal(tickets) {
+  return tickets.some(t => {
+    const sub = (t.subject || '').toLowerCase();
+    return CALL_DROP_KEYWORDS.some(kw => sub.includes(kw));
+  });
+}
+
+// Tier 2 (Future): CDR-based detection — uncomment when prod_catalog.silver.fact_calls exists
+// const CALL_DROPS_SQL = `
+// SELECT
+//   fc.msisdn,
+//   fc.call_id,
+//   fc.call_start_time,
+//   fc.call_end_time,
+//   fc.call_duration_seconds,
+//   fc.disconnect_reason,         -- e.g. 'ABNORMAL_RELEASE', 'RADIO_LINK_FAILURE'
+//   fc.cell_id,
+//   fc.signal_strength_dbm,
+//   fc.call_type                  -- 'VOLTE', 'CS_FALLBACK'
+// FROM prod_catalog.silver.fact_calls fc
+// WHERE fc.disconnect_reason IN ('ABNORMAL_RELEASE', 'RADIO_LINK_FAILURE', 'BEARER_LOST')
+//   AND fc.call_duration_seconds > 5        -- ignore sub-5s failed setup
+//   AND fc.call_start_time >= DATE_SUB(CURRENT_DATE(), 7)
+// `;
+
 // Stuck thresholds per stage (hours) — below this, customers are still progressing normally
 const STUCK_THRESHOLDS = {
   number_selection: 1,
@@ -370,6 +399,9 @@ function assignCisScenario(customer) {
     if (telcoStatus === 'Cancelled') {
       return { journeyStage: 'post_onboarding', milestone: 'service_issues', issueBucket: 'Service Resumed but Not Working', cisNumber: 28 };
     }
+    if (issueTags.includes('Call Drops')) {
+      return { journeyStage: 'post_onboarding', milestone: 'service_issues', issueBucket: 'Call Drops', cisNumber: 24 };
+    }
     return { journeyStage: 'others', milestone: null, issueBucket: 'Uncategorized', cisNumber: null };
   }
 
@@ -466,6 +498,9 @@ function computeHealthScore(customer, tickets) {
   // Urgent ticket
   if (tickets.some(t => t.priority === 'urgent')) score -= 10;
 
+  // Call drop reports — moderate penalty (service degradation)
+  if (hasCallDropSignal(tickets)) score -= 15;
+
   return Math.max(0, Math.min(100, score));
 }
 
@@ -514,6 +549,7 @@ function deriveIssueTags(customer, tickets) {
     if (!orderCompleted && (sub.includes('no service') || sub.includes('no signal'))) tags.add('No Network');
     if (sub.includes('login') || sub.includes('unable to login')) tags.add('Login Issue');
     if (sub.includes('cancel') || sub.includes('churn') || sub.includes('termination')) tags.add('Churn Risk');
+    if (CALL_DROP_KEYWORDS.some(kw => sub.includes(kw))) tags.add('Call Drops');
   }
 
   // Silent stuck customers (no tickets) — not applicable for completed orders with Airvet issue
@@ -681,6 +717,9 @@ function proactiveSubject(customer) {
     nw_enabled: `${firstName}, let's get your network up and running`,
     airvet_account: `${firstName}, one last step — setting up your Airvet account`,
   };
+  if (customer.issueTags?.includes('Call Drops')) {
+    return `${firstName}, we noticed call quality issues on your Meow Mobile line`;
+  }
   return subjects[customer.stuckAt] || `${firstName}, we're here to help with your Meow Mobile setup`;
 }
 
@@ -698,6 +737,7 @@ function proactiveTags(customer) {
   if (issueTags.includes('MNP Stuck')) tags.push('mnp_stuck');
   if (issueTags.includes('eSIM Failed')) tags.push('esim_failed');
   if (issueTags.includes('Airvet Pending')) tags.push('airvet_pending');
+  if (issueTags.includes('Call Drops')) tags.push('call_drops');
   if (customer.healthCategory) tags.push(`health_${customer.healthCategory}`);
   return tags;
 }
@@ -1070,11 +1110,13 @@ export async function GET() {
       if (hasPaymentFailure) issueTags.push(pf.failure_code ? `Payment Failed (${pf.failure_code})` : 'Payment Failed');
       if (pf?.customer_delinquent === 'true' || pf?.customer_delinquent === true) issueTags.push('Delinquent');
       if ((c.is_airvet_activated === 'false' || c.is_airvet_activated === false) && (parseInt(c.days_since_completed) || 0) > 3) issueTags.push('Airvet Pending');
+      if (hasCallDropSignal(custTickets)) issueTags.push('Call Drops');
 
       let recommendedAction = 'Review post-onboarding status.';
       if (hasPaymentFailure) recommendedAction = 'Contact customer to update payment method.';
       else if (c.telco_customer_status === 'Suspended') recommendedAction = 'Review suspension reason and contact customer.';
       else if (!c.telco_customer_status) recommendedAction = 'Investigate why telco account not activated.';
+      else if (issueTags.includes('Call Drops')) recommendedAction = 'Customer reporting call drops. Check VoLTE, signal strength, network outages in customer area.';
 
       return {
         id: c.user_id || c.individual_id || c.customer_id,

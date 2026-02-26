@@ -650,6 +650,46 @@ function buildResolutionSteps(stuckAt, issueTags, customer) {
         },
       ];
 
+    // ───── COMPLETED (Post-Onboarding) ─────
+    case 'completed':
+      if (issueTags?.includes('Call Drops')) {
+        return [
+          {
+            title: 'Probe & empathize — gather call drop details',
+            detail: '1. Ask when call drops started (date/time with timezone)\n2. How often? Every call, or intermittent?\n3. Specific locations where drops occur (home, commute, office)?\n4. Does it happen on incoming, outgoing, or both?\n5. Is there a pattern (time of day, after X minutes)?\n6. Did calls work fine before at the same location?\n7. Any recent device updates, SIM changes, or travel?',
+          },
+          {
+            title: 'Check tools — outage, barring, similar tickets',
+            detail: '1. Check Network Outage Checker in Zendesk for known issues in customer area\n2. Verify telco account status in ConnectX — no barring, suspension, or billing hold\n3. Check MSISDN status: Active, not in grace period\n4. Search Zendesk for similar recent tickets from same area (cell tower issue?)\n5. Check if customer has VoLTE enabled (required for call quality)',
+          },
+          {
+            title: 'L0 troubleshooting — VoLTE, network, device',
+            detail: '1. Confirm VoLTE is enabled: Settings > Cellular > Cellular Data Options > Voice & Data > LTE/VoLTE ON\n2. Toggle Airplane Mode ON for 30 seconds, then OFF\n3. Switch network mode: Settings > Cellular > Network Selection > toggle off Auto, select carrier manually, then back to Auto\n4. Reset Network Settings (warn: saves Wi-Fi passwords will be lost)\n5. Check if eSIM is set as primary line for voice\n6. Toggle between 4G/5G and test calls\n7. Test with Wi-Fi Calling enabled vs disabled\n8. If dual-SIM: disable other SIM temporarily and test\n9. Ask customer to perform test call and note signal bars during drop',
+          },
+          {
+            title: 'L1 escalation — collect mandatory incident data',
+            detail: 'Mandatory fields (L1 will REJECT without these):\n- Device Make & Model (e.g., iPhone 15 Pro Max)\n- OS Version (e.g., iOS 17.4.1)\n- ICCID / IMEI / EID\n- Location where drops occur: Full Address + Lat/Long (ZIP alone NOT accepted)\n- Signal bars at drop location (0-5)\n- Timestamps of last 3 dropped calls (date + time + timezone)\n- Screenshot of signal strength / Field Test mode\n- VoLTE status: enabled or disabled\n- Did customer try all L0 steps? (Yes — list which ones)\n\nEscalation steps:\n1. Add all above to internal note\n2. Set priority based on frequency (every call = urgent, intermittent = high)\n3. Tag: issue____network, call_drops\n4. Assign to L1 Network queue\n5. Set ticket to On-Hold\n6. Inform customer: ETR 24-48h for network investigation',
+            escalation: 'Escalate after all L0 steps exhausted. Mandatory: device model, OS, location with lat/long, signal screenshots, timestamps of dropped calls',
+          },
+        ];
+      }
+      // Generic post-onboarding (Suspended, Cancelled, etc.)
+      return [
+        {
+          title: 'Review post-onboarding account status',
+          detail: '1. Check telco account status in ConnectX (Active/Suspended/Cancelled)\n2. If Suspended: check reason (payment failure, fraud, customer request)\n3. If Cancelled: verify cancellation date and reason\n4. Review billing status and last successful payment\n5. Check for any pending port-out requests',
+        },
+        {
+          title: 'Follow Device Troubleshooting Guide (12 steps)',
+          detail: '1. Check IMEI/EID\n2. Restart device\n3. Toggle Airplane Mode ON/OFF\n4. Reset Network Settings\n5. Check APN settings ("ereseller")\n6. Manual Network Selection\n7. Toggle 4G/5G\n8. Manual eSIM Setup (if needed)\n9. Toggle eSIM On/Off\n10. Set eSIM as Primary\n11. Delete old/unused SIM profiles\n12. Check Roaming Status',
+        },
+        {
+          title: 'Collect mandatory incident data for escalation',
+          detail: 'Non-negotiable fields for L1 escalation:\n- ICCID, IMEI, SIM Type (Physical/eSIM)\n- Device Make & Model, OS Version\n- Issue Start Date & Time (with timezone)\n- Ongoing or Intermittent\n- Location: Full Address + Latitude & Longitude (ZIP alone NOT accepted)\n- Signal Bars (0-5)\n- Worked Before at Same Location? (Yes/No)\n- Exact Error Message (copy-paste only, never paraphrase)\n\nL1/L2 will REJECT tickets if:\n- Mandatory fields missing\n- Error messages paraphrased\n- No timestamps or IDs provided',
+          escalation: 'Escalate only after ALL mandatory fields collected and all L0 troubleshooting performed',
+        },
+      ];
+
     // ───── DEFAULT ─────
     default:
       return [
@@ -738,6 +778,18 @@ function getKbArticles(stuckAt, issueTags, customer) {
       articles.push({ title: 'Airvet Account Setup & Pet Registration', id: '44455580058395' });
       articles.push({ title: 'States Where Airvet Can Prescribe', id: '45569798195355' });
       articles.push({ title: 'Airvet Escalation', id: '44455585587483' });
+      break;
+    case 'completed':
+      if (issueTags?.includes('Call Drops')) {
+        articles.push({ title: 'Calls Keep Dropping', id: '44454839305883' });
+        articles.push({ title: 'Network Outage Checker', id: '44600050078363' });
+        articles.push({ title: 'Device Troubleshooting Guide', id: '44455761075099' });
+        articles.push({ title: 'Mandatory Incident Data & Escalation', id: '46471334875547' });
+      } else {
+        articles.push({ title: 'Device Troubleshooting Guide (12 Steps)', id: '44455761075099' });
+        articles.push({ title: 'Mandatory Incident Data Collection & Escalation', id: '46471334875547' });
+        articles.push({ title: 'Number Suspension (payment failure)', id: '43019888509851' });
+      }
       break;
     default:
       articles.push({ title: 'Device Troubleshooting Guide (12 Steps)', id: '44455761075099' });
