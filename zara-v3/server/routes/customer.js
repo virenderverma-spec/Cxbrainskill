@@ -1771,199 +1771,6 @@ function computeJourneyStage(lookup, posthogFriction) {
   return { stage: 'completed', label: 'Onboarding complete' };
 }
 
-/**
- * Determine ball-in-court from Zendesk ticket tags and status.
- * Priority: explicit ball: tags > ticket status inference
- */
-function computeBallInCourt(tickets, commentArrays) {
-  const allTickets = (tickets && tickets.tickets) || [];
-  if (allTickets.length === 0) return { ball: null, since: null, ticketId: null };
-
-  // Check the most recent open/pending/new ticket
-  const activeTicket = allTickets.find(t =>
-    t.status === 'open' || t.status === 'pending' || t.status === 'new' || t.status === 'hold'
-  );
-
-  if (!activeTicket) return { ball: null, since: null, ticketId: null };
-
-  const tags = activeTicket.tags || [];
-
-  // Check explicit ball tags
-  if (tags.includes('ball:ours')) {
-    return { ball: 'ours', since: activeTicket.updated_at, ticketId: activeTicket.id };
-  }
-  if (tags.includes('ball:theirs')) {
-    return { ball: 'theirs', since: activeTicket.updated_at, ticketId: activeTicket.id };
-  }
-  if (tags.includes('ball:partner')) {
-    return { ball: 'partner', since: activeTicket.updated_at, ticketId: activeTicket.id };
-  }
-
-  // Infer from ticket status
-  if (activeTicket.status === 'pending') {
-    return { ball: 'theirs', since: activeTicket.updated_at, ticketId: activeTicket.id };
-  }
-  if (activeTicket.status === 'hold') {
-    return { ball: 'partner', since: activeTicket.updated_at, ticketId: activeTicket.id };
-  }
-  // open or new = ball is ours
-  return { ball: 'ours', since: activeTicket.updated_at, ticketId: activeTicket.id };
-}
-
-/**
- * Determine if we owe the customer a communication.
- */
-function computeCommsDue(ballInCourt, previousContacts, timers) {
-  if (!ballInCourt.ball) return { due: false, reason: null };
-
-  const now = Date.now();
-  const ballSince = ballInCourt.since ? new Date(ballInCourt.since).getTime() : now;
-  const elapsed = now - ballSince;
-  const elapsedHours = elapsed / 3600000;
-
-  // Find last outbound message time (from us to customer)
-  let lastOutboundTime = null;
-  if (previousContacts) {
-    const lastEmail = previousContacts.find(c => c.channel === 'Email');
-    if (lastEmail && lastEmail.date) lastOutboundTime = new Date(lastEmail.date).getTime();
-  }
-  const timeSinceOutbound = lastOutboundTime ? (now - lastOutboundTime) / 3600000 : null;
-
-  switch (ballInCourt.ball) {
-    case 'ours':
-      // We owe the customer — overdue if SLA exceeded
-      if (elapsedHours > 4) {
-        return { due: true, reason: 'Ball in our court for ' + Math.round(elapsedHours) + ' hours — response overdue', urgency: 'high' };
-      }
-      if (elapsedHours > 1) {
-        return { due: true, reason: 'Ball in our court for ' + Math.round(elapsedHours) + ' hours', urgency: 'medium' };
-      }
-      return { due: false, reason: null };
-
-    case 'theirs':
-      // We're waiting for them — send reminder after 24h
-      if (elapsedHours > 48) {
-        return { due: true, reason: 'Customer hasn\'t responded in ' + Math.round(elapsedHours) + ' hours — send final nudge', urgency: 'medium' };
-      }
-      if (elapsedHours > 24) {
-        return { due: true, reason: 'Customer hasn\'t responded in ' + Math.round(elapsedHours) + ' hours — send reminder', urgency: 'low' };
-      }
-      return { due: false, reason: null };
-
-    case 'partner':
-      // We're waiting for partner — update customer if SLA exceeded
-      if (elapsedHours > 72) {
-        return { due: true, reason: 'Partner SLA exceeded (' + Math.round(elapsedHours) + 'h) — update customer', urgency: 'high' };
-      }
-      if (elapsedHours > 24) {
-        return { due: true, reason: 'Partner escalation pending — consider customer update', urgency: 'low' };
-      }
-      return { due: false, reason: null };
-
-    default:
-      return { due: false, reason: null };
-  }
-}
-
-/**
- * Compute the single next action the agent should take.
- */
-function computeNextAction(problem, journeyStage, ballInCourt, commsDue, lookup) {
-  // If comms are due, that's the highest priority
-  if (commsDue.due && commsDue.urgency === 'high') {
-    return {
-      action: 'send_followup',
-      label: 'Follow up with customer',
-      reason: commsDue.reason,
-      priority: 'high',
-    };
-  }
-
-  // Problem-specific actions
-  if (problem) {
-    switch (problem.type) {
-      case 'esim':
-        if (journeyStage.stage === 'esim_failed' || journeyStage.stage === 'esim_pending') {
-          return {
-            action: 'trigger_sim_swap',
-            label: 'Trigger SIM Swap',
-            reason: 'eSIM not activating — swap to fresh profile',
-            priority: 'high',
-            actionType: 'sim_swap',
-            individualId: lookup?.customer?.individualId,
-          };
-        }
-        break;
-      case 'portin':
-        return {
-          action: 'investigate_portin',
-          label: 'Check port-in rejection reason',
-          reason: 'Port-in failed — review rejection code and verify customer details',
-          priority: 'high',
-        };
-      case 'refund':
-        return {
-          action: 'process_refund',
-          label: 'Process refund via Stripe',
-          reason: 'Customer requesting refund',
-          priority: 'high',
-        };
-      case 'cancellation':
-        return {
-          action: 'cancel_account',
-          label: 'Cancel account',
-          reason: 'Customer requesting cancellation',
-          priority: 'medium',
-        };
-      case 'network':
-        return {
-          action: 'check_outages',
-          label: 'Check network outages',
-          reason: 'Customer reporting network issues',
-          priority: 'high',
-        };
-      case 'payment':
-        return {
-          action: 'check_payment',
-          label: 'Check payment status in Stripe',
-          reason: 'Payment not completed',
-          priority: 'high',
-        };
-      case 'mochi_escalation':
-        return {
-          action: 'review_mochi',
-          label: 'Review Mochi conversation',
-          reason: 'Customer escalated from chatbot — don\'t make them repeat',
-          priority: 'high',
-        };
-      case 'login_issue':
-        return {
-          action: 'check_account',
-          label: 'Check account status',
-          reason: 'Repeated login failures detected — verify account is active',
-          priority: 'medium',
-        };
-    }
-  }
-
-  // If comms are due (lower urgency)
-  if (commsDue.due) {
-    return {
-      action: 'send_followup',
-      label: 'Send follow-up',
-      reason: commsDue.reason,
-      priority: 'medium',
-    };
-  }
-
-  // Default — review customer state
-  return {
-    action: 'review',
-    label: 'Review customer conversation',
-    reason: 'No specific action identified — review latest ticket',
-    priority: 'low',
-  };
-}
 
 /**
  * Load agent-learned patterns from triage-kb.md.
@@ -2040,7 +1847,7 @@ function loadLobPromptOverlay(lobId) {
  * Generate a suggested response using Claude + brand-comms skill.
  * Returns the draft text or null if AI is not available.
  */
-async function generateSuggestedResponse(anthropicClient, problem, journeyStage, customerName, ballInCourt, lookup, agentTier, draftType, lobId) {
+async function generateSuggestedResponse(anthropicClient, problem, journeyStage, customerName, lookup, agentTier, draftType, lobId) {
   if (!anthropicClient) return null;
 
   try {
@@ -2055,7 +1862,6 @@ async function generateSuggestedResponse(anthropicClient, problem, journeyStage,
     context.push(`Customer name: ${customerName || 'there'}`);
     context.push(`Journey stage: ${journeyStage.label}`);
     if (problem) context.push(`Problem: ${problem.problem}`);
-    if (ballInCourt.ball) context.push(`Ball in court: ${ballInCourt.ball}`);
     if (lookup?.orders?.length > 0) {
       const o = lookup.orders[0];
       context.push(`Latest order status: ${o.status}, eSIM: ${o.esimStatus || 'N/A'}`);
@@ -2784,7 +2590,6 @@ router.post('/agent-brief', async (req, res) => {
 
     // Phase 3c: Customer State Engine (v3) — with PostHog-enhanced stage
     const journeyStage = computeJourneyStage(lookup, posthogFriction);
-    const ballInCourt = computeBallInCourt(zendeskResult, commentArrays);
 
     // Phase 4: Claude AI fallback if no clear problem
     if (!currentProblem && anthropic) {
@@ -2864,10 +2669,8 @@ router.post('/agent-brief', async (req, res) => {
       }
     }
 
-    // Phase 6: Compute timers + state engine fields
+    // Phase 6: Compute timers
     const timers = computeTimers(lookup, previousContacts, zendeskResult.tickets, nextSteps);
-    const commsDue = computeCommsDue(ballInCourt, previousContacts, timers);
-    const nextAction = computeNextAction(currentProblem, journeyStage, ballInCourt, commsDue, lookup);
 
     // Phase 7: Consolidated timeline (all tickets, all channels, + PostHog)
     const timeline = buildConsolidatedTimeline(lookup, payments, zendeskResult, lookup.mochi, commentArrays, posthogEvents);
@@ -2879,7 +2682,7 @@ router.post('/agent-brief', async (req, res) => {
 
     if (anthropic) {
       const aiTasks = [
-        generateSuggestedResponse(anthropic, currentProblem, journeyStage, customerName, ballInCourt, lookup, agentTier, draftType, lobId),
+        generateSuggestedResponse(anthropic, currentProblem, journeyStage, customerName, lookup, agentTier, draftType, lobId),
       ];
       const isVendorEscalatable = currentProblem && VENDOR_MAP[currentProblem.type];
       if (isVendorEscalatable) {
@@ -2907,7 +2710,7 @@ router.post('/agent-brief', async (req, res) => {
       when: f.event?.timestamp ? timeAgoLabel(f.event.timestamp) : null,
     }));
 
-    console.log(`  ✓ Agent brief: tier=${agentTier}, draft=${draftType}, stage=${journeyStage.stage}, ball=${ballInCourt.ball}, comms_due=${commsDue.due}, problem=${currentProblem ? currentProblem.type : 'none'}, posthog=${posthogFriction.length} signals, ${timeline.length} timeline events`);
+    console.log(`  ✓ Agent brief: tier=${agentTier}, draft=${draftType}, stage=${journeyStage.stage}, problem=${currentProblem ? currentProblem.type : 'none'}, posthog=${posthogFriction.length} signals, ${timeline.length} timeline events`);
     res.json({
       found: true,
       // v3.0: LOB context
@@ -2926,9 +2729,6 @@ router.post('/agent-brief', async (req, res) => {
       customerState: {
         journeyStage,
         openIssues: currentProblem ? [currentProblem.problem] : [],
-        ballInCourt,
-        commsDue,
-        nextAction,
         lastComms: previousContacts.length > 0 ? {
           channel: previousContacts[0].channel,
           reason: previousContacts[0].reason,
