@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Zara v2.0 — 4-Tab Command Center</title>
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;font-size:13px;line-height:1.5;background:#E4E8EC;display:flex;justify-content:center;padding:20px 12px;min-height:100vh}
+.frame{width:380px;background:var(--sf);border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.12),0 0 0 1px rgba(0,0,0,.06);overflow:hidden;position:relative}
+.ver{position:absolute;top:6px;right:8px;font-size:8px;font-weight:700;color:#fff;background:linear-gradient(135deg,#1F73B7,#7B1FA2);padding:2px 7px;border-radius:8px;z-index:200;letter-spacing:.5px}
+.ld-bar{height:3px;background:linear-gradient(90deg,#1F73B7,#7B1FA2,#1F73B7);background-size:200%;animation:shim 1.5s infinite;position:absolute;top:0;left:0;right:0;z-index:100}
+@keyframes shim{0%{background-position:200% 0}100%{background-position:-200% 0}}
+:root{
+  --ap:#1F73B7;--aph:#155A8A;--as:#038153;--ash:#026B44;
+  --sf:#fff;--sfm:#FAFAFA;--sfs:#F0F0F0;
+  --bd:#E9EBED;--bdl:#F0F0F0;--bds:#D8DCDE;
+  --tp:#2F3941;--ts:#68737D;--tm:#999;--tmt:#87929D;
+  --grn:#038153;--red:#CC3340;--amb:#AD5E18;--blu:#1F73B7;--pur:#7B1FA2;--org:#C96400;
+  --bgn:#D1E8DF;--bga:#FFF4E0;--bgr:#FFEEF0;--bgb:#EDF7FF;--bgp:#F3E8FF;--bgg:#F0F0F0;
+  --ulb:#F6FDF9;--umb:#FFF8F0;--uhb:#FFF0F0;
+}
+
+/* Tabs */
+.tabs{display:flex;border-bottom:1px solid var(--bd);background:var(--sfm)}
+.tab{flex:1;padding:9px 4px;text-align:center;font-size:11px;font-weight:600;color:var(--ts);background:none;border:none;border-bottom:2px solid transparent;cursor:pointer;transition:all .15s;position:relative}
+.tab:hover{color:var(--blu);background:var(--bgb)}
+.tab.on{color:var(--blu);border-bottom-color:var(--blu);background:var(--sf)}
+.tc{display:none;padding:12px;overflow-y:auto;max-height:calc(100vh - 140px)}
+.tc.on{display:block}
+
+/* Shared */
+.bdg{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600}
+.bdg-g{background:var(--bgn);color:var(--grn)}.bdg-a{background:var(--bga);color:var(--amb)}.bdg-r{background:var(--bgr);color:var(--red)}.bdg-b{background:var(--bgb);color:var(--blu)}.bdg-x{background:var(--bgg);color:var(--ts)}
+.sec{margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--bdl)}
+.sec:last-child{border-bottom:none;margin-bottom:0;padding-bottom:0}
+.sec h4{font-size:10px;font-weight:700;color:var(--ts);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.r{display:flex;justify-content:space-between;align-items:center;padding:3px 0;font-size:13px}
+.r .l{color:var(--ts);font-weight:500}.r .v{color:var(--tp);font-weight:500;text-align:right;max-width:55%;word-break:break-word}
+.mono{font-family:"SF Mono",Monaco,Consolas,monospace;font-size:11px}
+
+/* ═══ TAB 1: TRIAGE ═══ */
+.hero{padding:12px 14px;border-radius:8px;background:var(--sf);border:1px solid var(--bd);margin-bottom:10px}
+.hero-t{display:flex;justify-content:space-between;align-items:center;padding-bottom:8px;margin-bottom:8px;border-bottom:1px solid var(--bdl)}
+.hero-n{font-size:14px;font-weight:600;color:var(--tp)}
+.hero-p{font-size:13px;font-weight:500;line-height:1.45;color:var(--tp)}
+
+.urg{padding:8px 12px;border-radius:6px;font-size:12px;font-weight:500;cursor:pointer;margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.urg.hi{border-left:3px solid var(--red);background:var(--uhb)}
+.urg .dt{width:7px;height:7px;border-radius:50%;flex-shrink:0;background:var(--red)}
+.urg .chv{margin-left:auto;font-size:10px;color:var(--tm);transition:transform .15s}
+.urg.op .chv{transform:rotate(180deg)}
+.urg-d{display:none;margin-bottom:10px}.urg-d.vis{display:block}
+
+.ct{padding:8px 10px;margin-bottom:6px;border-radius:6px;background:var(--sfm);border:1px solid var(--bd)}
+.ct-h{display:flex;align-items:center;gap:6px;margin-bottom:3px}
+.ct-ch{display:inline-block;padding:2px 8px;border-radius:10px;font-size:9px;font-weight:700;text-transform:uppercase}
+.ch-e{background:var(--bgb);color:var(--blu)}.ch-m{background:var(--bgp);color:var(--pur)}
+.ct-dt{font-size:11px;color:var(--tm);margin-left:auto}
+.ct-s{font-size:12px;color:var(--tp);line-height:1.4}
+
+.ac{padding:12px;border-radius:8px;background:var(--sf);border:1px solid var(--bd);margin-bottom:8px}
+.ac-h{display:flex;align-items:flex-start;gap:10px}
+.ac-i{width:28px;height:28px;min-width:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px}
+.ac-i.inv{background:var(--bgb);color:var(--blu)}.ac-i.ask{background:var(--bga);color:var(--amb)}.ac-i.cust{background:var(--bgn);color:var(--grn)}.ac-i.kb{background:var(--bgp);color:var(--pur)}.ac-i.done{background:var(--bgn);color:var(--grn)}
+.ac-t{font-size:13px;font-weight:600;color:var(--tp);flex:1;line-height:1.4}
+.ac-r{font-size:12px;color:var(--ts);margin-top:4px;line-height:1.4}
+.ss{font-size:10px;color:var(--tm);font-style:italic;margin-top:2px}
+
+.cta{display:inline-flex;align-items:center;gap:4px;padding:6px 14px;margin-top:8px;font-size:11px;font-weight:600;background:var(--ap);color:#fff;border:none;border-radius:5px;cursor:pointer;transition:all .15s}
+.cta:hover{background:var(--aph);transform:translateY(-1px);box-shadow:0 2px 6px rgba(31,115,183,.25)}
+.cta.ld{opacity:.6;pointer-events:none}.cta.ok{background:var(--grn)}
+.cta-r{margin-top:6px;padding:8px 10px;font-size:12px;border-radius:6px;line-height:1.4;animation:sd .2s ease}
+@keyframes sd{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
+.cta-r.suc{background:var(--bgn);color:var(--grn);border-left:3px solid var(--grn)}
+.cta-r.pnd{background:var(--bga);color:var(--amb);border-left:3px solid var(--amb)}
+
+.tgl{font-size:11px;color:var(--ap);background:none;border:none;cursor:pointer;font-weight:600;padding:4px 0}
+.tgl:hover{text-decoration:underline}
+.cst{display:none;margin-bottom:8px}.cst.vis{display:block}
+.rs{display:flex;align-items:flex-start;gap:8px;padding:5px 0;font-size:12px}
+.rs-i{width:20px;height:20px;min-width:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px}
+.rs-t{flex:1;line-height:1.4;color:var(--tp)}
+.rs-d{color:var(--ts);text-decoration:line-through;text-decoration-color:#C2C8CC}
+
+/* Draft */
+.dft{border-radius:10px;background:linear-gradient(135deg,#F0FDF6,#ECFDF5);border:2px solid #86EFAC;overflow:hidden;margin-bottom:10px;box-shadow:0 2px 8px rgba(3,129,83,.1)}
+.dft-l{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--grn);padding:10px 14px 0;display:flex;align-items:center;gap:6px}
+.dft-l::before{content:'✉';font-size:14px}
+.dft-st{font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;margin-left:auto}
+.dft-st.rdy{background:var(--bgn);color:var(--grn)}.dft-st.rev{background:var(--bga);color:var(--amb)}
+.dft-b{padding:8px 14px 10px;font-size:13px;line-height:1.6;color:#1a3a2a;max-height:80px;overflow:hidden;white-space:pre-wrap;cursor:pointer;position:relative}
+.dft-b::after{content:'';position:absolute;bottom:0;left:0;right:0;height:28px;background:linear-gradient(transparent,#ECFDF5);pointer-events:none}
+.dft-b.exp{max-height:none;overflow:visible}.dft-b.exp::after{display:none}
+.dft-v{padding:6px 14px;display:flex;flex-wrap:wrap;gap:4px}
+.dft-f{font-size:10px;color:var(--grn);background:#DCFCE7;padding:2px 8px;border-radius:10px;font-weight:500}
+.dft-w{font-size:10px;color:#92400E;background:#FEF3C7;padding:2px 8px;border-radius:10px}
+.dft-a{display:flex;gap:6px;padding:10px 14px;border-top:1px solid #BBF7D0;background:rgba(255,255,255,.6)}
+.b-edit{flex:1;padding:7px 12px;border:1px solid #86EFAC;border-radius:6px;background:var(--sf);color:var(--grn);font-size:12px;font-weight:600;cursor:pointer}
+.b-edit:hover{background:#F0FDF6;border-color:var(--grn)}
+.b-send{padding:7px 14px;border:none;border-radius:6px;background:var(--as);color:#fff;font-size:12px;font-weight:600;cursor:pointer;box-shadow:0 1px 3px rgba(3,129,83,.3)}
+.b-send:hover{background:var(--ash)}
+.b-combo{padding:7px 14px;border:none;border-radius:6px;background:linear-gradient(135deg,#038153,#026B44);color:#fff;font-size:11px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:4px;box-shadow:0 2px 8px rgba(3,129,83,.3);transition:all .15s}
+.b-combo:hover{box-shadow:0 4px 12px rgba(3,129,83,.4);transform:translateY(-1px)}
+
+/* Escalation */
+.esc{border-radius:10px;background:linear-gradient(135deg,#FFFBEB,#FEF3C7);border:2px solid #FBBF24;border-left:4px solid #F59E0B;overflow:hidden;margin-bottom:10px}
+.esc-l{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#92400E;padding:10px 14px 4px;display:flex;align-items:center;gap:6px}
+.esc-v{font-size:10px;font-weight:600;color:#fff;background:#F59E0B;padding:2px 8px;border-radius:10px;margin-left:auto}
+.esc-b{padding:6px 14px 10px;font-size:12px;line-height:1.5;color:#451A03;max-height:60px;overflow:hidden;white-space:pre-wrap}
+
+/* Proactive + Growth */
+.pa{padding:10px 12px;margin-bottom:8px;border-radius:8px;border:1px solid var(--bd);background:var(--sf);position:relative}
+.pa.hi{border-left:4px solid var(--red);background:var(--uhb)}
+.pa.md{border-left:4px solid var(--amb);background:var(--umb)}
+.pa.grow{border-left:4px solid var(--blu);background:var(--bgb)}
+.pa-h{display:flex;align-items:center;gap:6px;margin-bottom:4px}
+.pa-ic{font-size:14px}.pa-ti{font-size:12px;font-weight:600;color:var(--tp);flex:1}
+.pa-x{font-size:16px;color:var(--tm);cursor:pointer;background:none;border:none;line-height:1}.pa-x:hover{color:var(--red)}
+.pa-d{font-size:11px;color:var(--ts);line-height:1.4;margin-bottom:8px}
+.pa-c{padding:5px 12px;font-size:10px;font-weight:600;background:var(--ap);color:#fff;border:none;border-radius:4px;cursor:pointer;transition:all .12s}
+.pa-c:hover{background:var(--aph)}
+.pa-c.g{background:var(--as)}.pa-c.g:hover{background:var(--ash)}
+
+/* Divider label */
+.sec-div{font-size:10px;font-weight:700;color:var(--ts);text-transform:uppercase;letter-spacing:.6px;margin:14px 0 10px;padding-top:10px;border-top:1px solid var(--bd);display:flex;align-items:center;gap:6px}
+
+/* ═══ TAB 2: CONTEXT ═══ */
+.cc{padding:10px 12px;border-radius:6px;background:var(--sfm);border:1px solid var(--bd);margin-bottom:10px}
+.cc-n{font-size:14px;font-weight:600;color:var(--tp);display:flex;align-items:center;gap:6px}
+.cc-r{display:flex;gap:12px;font-size:12px;color:var(--ts);margin-top:3px}
+.fun{display:flex;gap:2px;margin-bottom:6px}
+.fun-s{flex:1;padding:6px 3px;text-align:center;font-size:9px;font-weight:600;border-radius:4px;background:var(--sfs);color:var(--tm)}
+.fun-s.ok{background:var(--bgn);color:var(--grn)}.fun-s.cur{background:var(--bga);color:var(--amb);box-shadow:0 0 0 2px #FFCC80}.fun-s.err{background:var(--bgr);color:var(--red);box-shadow:0 0 0 2px #F8A0A8}
+.fun-lb{font-size:10px;color:var(--ts);margin-top:2px;font-weight:500}
+.fr-r{padding:5px 0;border-bottom:1px solid var(--bdl)}
+.fr-h{display:flex;align-items:center;gap:6px}
+.fr-c{font-weight:600;font-size:12px;color:var(--tp)}
+.fr-n{font-size:10px;font-weight:600;padding:1px 6px;border-radius:8px;background:var(--bgr);color:var(--red)}
+.fr-d{font-size:11px;color:var(--tmt);margin-top:2px;padding-left:24px}
+.cm-r{padding:6px 0;border-bottom:1px solid var(--bdl)}
+.cm-h{display:flex;gap:8px;align-items:baseline}
+.cm-dt{font-size:10px;color:var(--tmt);min-width:50px;flex-shrink:0}
+.cm-tp{font-size:12px;font-weight:600;color:var(--tp)}
+
+/* ═══ TAB 3: SLA + Action Log ═══ */
+.sla-m{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px}
+.sla-b{font-size:10px;padding:3px 8px;border-radius:10px;font-weight:600}
+.sm{margin-bottom:12px}
+.sm-h{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
+.sm-l{font-size:11px;font-weight:500;color:var(--ts)}.sm-t{font-size:11px;font-weight:700;font-variant-numeric:tabular-nums}
+.sm-bar{height:6px;background:var(--bd);border-radius:3px;overflow:hidden}
+.sm-f{height:100%;border-radius:3px;transition:width .5s;min-width:2px}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+
+.log-div{font-size:10px;font-weight:700;color:var(--ts);text-transform:uppercase;letter-spacing:.6px;margin:16px 0 10px;padding-top:12px;border-top:1px solid var(--bd);display:flex;align-items:center;gap:6px}
+.log-e{display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--bdl);animation:sd .2s ease}
+.log-tm{font-size:10px;color:var(--tmt);min-width:48px;flex-shrink:0;font-variant-numeric:tabular-nums;padding-top:1px}
+.log-a{font-size:12px;font-weight:600;color:var(--tp)}
+.log-r{font-size:11px;color:var(--ts);margin-top:1px}
+.log-n{font-size:10px;color:var(--grn);margin-top:2px;font-style:italic}
+.log-ic{width:20px;height:20px;min-width:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;margin-top:1px}
+.lic-ok{background:var(--bgn);color:var(--grn)}.lic-i{background:var(--bgb);color:var(--blu)}.lic-s{background:var(--bgp);color:var(--pur)}
+
+/* ═══ TAB 4: AI ═══ */
+.ai{border:1px solid var(--bd);border-radius:8px;overflow:hidden;background:var(--sf);display:flex;flex-direction:column;height:500px}
+.ai-ms{flex:1;overflow-y:auto;padding:12px;background:var(--sfm)}
+.ai-m{display:flex;gap:8px;margin-bottom:14px}
+.ai-av{width:28px;height:28px;min-width:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px}
+.ai-m.ast .ai-av{background:var(--bgp);color:var(--pur)}.ai-m.usr .ai-av{background:var(--bgn);color:var(--grn)}
+.ai-bd{flex:1;padding:8px 12px;border-radius:8px;font-size:13px;line-height:1.5}
+.ai-m.ast .ai-bd{background:var(--sf);border:1px solid var(--bd)}.ai-m.usr .ai-bd{background:var(--bgb);border:1px solid #C2DEFF}
+.ai-in{display:flex;border-top:1px solid var(--bd)}
+.ai-in textarea{flex:1;padding:10px 12px;border:none;font-size:13px;resize:none;min-height:38px;font-family:inherit}
+.ai-in textarea:focus{outline:none}
+.ai-in .snd{padding:0 14px;background:var(--ap);color:#fff;border:none;font-weight:700;font-size:14px;cursor:pointer}
+.ai-in .snd:hover{background:var(--aph)}
+
+::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:#D8DCDE;border-radius:3px}
+</style>
+</head>
+<body>
+<div class="frame">
+<span class="ver">v2.0</span>
+<div class="ld-bar" id="ld"></div>
+
+<div class="tabs">
+  <button class="tab on" onclick="sw('triage',this)">Triage</button>
+  <button class="tab" onclick="sw('context',this)">Context</button>
+  <button class="tab" onclick="sw('sla',this)">SLA</button>
+  <button class="tab" onclick="sw('ai',this)">AI Query</button>
+</div>
+
+<!-- ═══════════════════ TAB 1: TRIAGE ═══════════════════ -->
+<div class="tc on" id="tab-triage">
+
+  <!-- Hero Card -->
+  <div class="hero">
+    <div class="hero-t">
+      <span class="hero-n">Sarah Chen</span>
+      <span class="bdg bdg-a">IN PROGRESS</span>
+    </div>
+    <div class="hero-p">Port-in rejected — PIN mismatch with T-Mobile. Customer has contacted 3× about this issue.</div>
+  </div>
+
+  <!-- Urgency Strip -->
+  <div class="urg hi" onclick="togU()">
+    <span class="dt"></span>
+    <span><strong>3 contacts</strong> · 1 escalation · 5 days</span>
+    <span class="chv" id="uc">▾</span>
+  </div>
+  <div class="urg-d" id="ud">
+    <div class="ct">
+      <div class="ct-h"><span class="ct-ch ch-m">Mochi</span><span class="bdg bdg-r" style="font-size:9px">Escalated</span><span class="ct-dt">Feb 19, 3:42 PM</span></div>
+      <div class="ct-s">Customer chatted about port-in failure. Escalated to live agent.</div>
+    </div>
+    <div class="ct">
+      <div class="ct-h"><span class="ct-ch ch-e">Email</span><span class="bdg bdg-a" style="font-size:9px">Open</span><span class="ct-dt">Feb 17, 11:20 AM</span></div>
+      <div class="ct-s">Number transfer not completing. Still open — needs agent action.</div>
+    </div>
+    <div class="ct">
+      <div class="ct-h"><span class="ct-ch ch-e">Email</span><span class="bdg bdg-g" style="font-size:9px">Solved</span><span class="ct-dt">Feb 15, 9:05 AM</span></div>
+      <div class="ct-s">eSIM activation help. Ticket was resolved.</div>
+    </div>
+  </div>
+
+  <!-- Primary Next Step + CTA -->
+  <div class="ac">
+    <div class="ac-h">
+      <div class="ac-i inv">🔍</div>
+      <div class="ac-t">Check port-in rejection reason from T-Mobile</div>
+    </div>
+    <div class="ac-r">Port was submitted Feb 16 — no update for 5 days</div>
+    <div class="ss">Source: triage-kb.md § Port-In Troubleshooting</div>
+    <button class="cta" onclick="doCTA(this,'port')">▶ Check Port Status</button>
+    <div class="cta-r suc" id="cr1" style="display:none">
+      <strong>REJECTED</strong> — PIN_MISMATCH (T-Mobile)<br>
+      Donor: T-Mobile · Account: ****4821 · Submitted: Feb 16<br>
+      <em>Internal note auto-posted to ticket #10849</em>
+    </div>
+  </div>
+
+  <button class="tgl" onclick="togS('ms')">2 more steps</button>
+  <div class="cst" id="ms">
+    <div class="rs">
+      <div class="rs-i" style="background:var(--bga);color:var(--amb)">?</div>
+      <div class="rs-t">Ask customer for correct T-Mobile PIN (or request new one from T-Mobile)</div>
+    </div>
+    <div class="rs">
+      <div class="rs-i" style="background:var(--bgn);color:var(--grn)">↻</div>
+      <div class="rs-t">Re-submit port-in with corrected PIN
+        <button class="cta" onclick="doCTA(this,'resub')" style="margin-top:4px;padding:4px 10px;font-size:10px">▶ Re-submit Port</button>
+      </div>
+    </div>
+  </div>
+
+  <button class="tgl" onclick="togS('ds')">2 completed</button>
+  <div class="cst" id="ds">
+    <div class="rs"><div class="rs-i" style="background:var(--bgn);color:var(--grn)">✓</div><div class="rs-t rs-d">Verified customer identity via Stripe + Boss API</div></div>
+    <div class="rs"><div class="rs-i" style="background:var(--bgn);color:var(--grn)">✓</div><div class="rs-t rs-d">Confirmed eSIM is active — no connectivity issue</div></div>
+  </div>
+
+  <!-- Draft -->
+  <div class="dft">
+    <div class="dft-l">Draft Reply<span class="dft-st rev">Needs review</span></div>
+    <div class="dft-b" onclick="this.classList.toggle('exp')">Hey Sarah,
+
+I checked on your number transfer and I can see it was rejected by T-Mobile because the PIN didn't match their records.
+
+To fix this, you'll need to get a fresh transfer PIN from T-Mobile. You can do this by:
+- Calling T-Mobile at 611 from your T-Mobile phone
+- Or logging into your T-Mobile account and requesting a new PIN
+
+Once you have the new PIN, just reply here with it and I'll resubmit the transfer right away. Usually goes through within 1-2 business days.
+
+Best,
+Agent · Meow Mobile Support</div>
+    <div class="dft-v">
+      <span class="dft-f">✓ Port status verified</span>
+      <span class="dft-f">✓ Account confirmed active</span>
+      <span class="dft-w">⚠ Verify T-Mobile PIN instructions</span>
+    </div>
+    <div class="dft-a">
+      <button class="b-edit">Edit</button>
+      <button class="b-send">Send</button>
+      <button class="b-combo" onclick="doCombo(this)">⚡ Send + Note + Close</button>
+    </div>
+  </div>
+
+  <!-- Escalation Package -->
+  <div class="esc">
+    <div class="esc-l">Escalation Package<span class="esc-v">ConnectX</span></div>
+    <div class="esc-b">Subject: Port-In PIN Mismatch — Resubmission Required
+Customer: sarah.chen@gmail.com | Individual: ind_8a3f...
+MSISDN: (555) 867-5309 | Order: ord_7c2e...
+Port Status: REJECTED — PIN_MISMATCH
+Donor: T-Mobile | Account: ****4821</div>
+  </div>
+
+  <!-- ═══ PROACTIVE ALERTS ═══ -->
+  <div class="sec-div">⚡ Proactive Alerts</div>
+
+  <div class="pa hi">
+    <div class="pa-h"><span class="pa-ic">⚠️</span><span class="pa-ti">SLA breached — Next Response</span><button class="pa-x" onclick="this.closest('.pa').remove()">×</button></div>
+    <div class="pa-d">Next response SLA exceeded by 2h 12m. Customer has escalated once already — high churn risk.</div>
+    <button class="pa-c" onclick="this.textContent='✓ Prioritized';this.style.background='var(--grn)'">Mark Urgent</button>
+  </div>
+
+  <div class="pa md">
+    <div class="pa-h"><span class="pa-ic">💳</span><span class="pa-ti">Payment method expiring</span><button class="pa-x" onclick="this.closest('.pa').remove()">×</button></div>
+    <div class="pa-d">Visa ****4821 expires next month. Service may lapse if not updated before renewal.</div>
+    <button class="pa-c" onclick="this.textContent='✓ Link Sent';this.style.background='var(--grn)'">Send Payment Update Link</button>
+  </div>
+
+  <!-- ═══ GROWTH OPPORTUNITIES ═══ -->
+  <div class="sec-div">🌱 Growth Opportunities</div>
+
+  <div class="pa grow">
+    <div class="pa-h"><span class="pa-ic">🐾</span><span class="pa-ti">Airvet not activated</span><button class="pa-x" onclick="this.closest('.pa').remove()">×</button></div>
+    <div class="pa-d">Active subscriber for 12 days but hasn't set up free Airvet pet insurance benefit. 68% of activated users retain longer.</div>
+    <button class="pa-c g" onclick="this.textContent='✓ Guide Sent';this.style.background='var(--grn)'">Send Airvet Setup Guide</button>
+  </div>
+
+  <div class="pa grow">
+    <div class="pa-h"><span class="pa-ic">👥</span><span class="pa-ti">Referral program eligible</span><button class="pa-x" onclick="this.closest('.pa').remove()">×</button></div>
+    <div class="pa-d">Sarah is an SSC cohort member (high NPS). Eligible for refer-a-friend $20 credit after 14 days active.</div>
+    <button class="pa-c g" onclick="this.textContent='✓ Invite Sent';this.style.background='var(--grn)'">Send Referral Invite</button>
+  </div>
+
+  <div class="pa grow">
+    <div class="pa-h"><span class="pa-ic">📱</span><span class="pa-ti">Multi-line upsell</span><button class="pa-x" onclick="this.closest('.pa').remove()">×</button></div>
+    <div class="pa-d">Customer searched "add a line" in app 2× this week. Family plan saves 20% per line.</div>
+    <button class="pa-c g" onclick="this.textContent='✓ Info Sent';this.style.background='var(--grn)'">Send Family Plan Info</button>
+  </div>
+
+</div>
+
+<!-- ═══════════════════ TAB 2: CONTEXT ═══════════════════ -->
+<div class="tc" id="tab-context">
+
+  <!-- Mochi -->
+  <div class="sec">
+    <h4>Mochi — Collected Info</h4>
+    <div class="r"><span class="l">Issue Reported</span><span class="v">Number transfer not working</span></div>
+    <div class="r"><span class="l">Last Message</span><span class="v">I've been waiting 5 days for my number</span></div>
+  </div>
+
+  <!-- Funnel -->
+  <div class="sec">
+    <h4>Account Stage</h4>
+    <div class="fun">
+      <div class="fun-s ok">Order</div>
+      <div class="fun-s ok">Pay</div>
+      <div class="fun-s err">Port</div>
+      <div class="fun-s ok">eSIM</div>
+      <div class="fun-s">Airvet</div>
+      <div class="fun-s ok">Active</div>
+    </div>
+    <div class="fun-lb">⚠ Port-in rejected — PIN mismatch</div>
+  </div>
+
+  <!-- Customer Card -->
+  <div class="cc">
+    <div class="cc-n">Sarah Chen <span class="bdg bdg-b">SSC</span></div>
+    <div class="cc-r"><span>sarah.chen@gmail.com</span></div>
+    <div class="cc-r"><span>(555) 867-5309</span><span>Since Feb 10, 2026</span></div>
+  </div>
+
+  <!-- Line & SIM -->
+  <div class="sec">
+    <h4>Line & SIM</h4>
+    <div class="r"><span class="l">Mobile #</span><span class="v">(555) 867-5309</span></div>
+    <div class="r"><span class="l"># Status</span><span class="v"><span class="bdg bdg-g">Active</span></span></div>
+    <div class="r"><span class="l">Port-in</span><span class="v"><span class="bdg bdg-r">REJECTED</span></span></div>
+    <div class="r"><span class="l">eSIM Status</span><span class="v"><span class="bdg bdg-g">INSTALLED</span></span></div>
+    <div class="r"><span class="l">Device</span><span class="v">iPhone 15 Pro</span></div>
+    <div class="r"><span class="l">ICCID</span><span class="v mono">8901260882...</span></div>
+  </div>
+
+  <!-- Order -->
+  <div class="sec">
+    <details>
+      <summary style="font-size:11px;font-weight:700;color:var(--ts);text-transform:uppercase;cursor:pointer;letter-spacing:.5px">ORDER <span class="bdg bdg-a">IN PROGRESS</span></summary>
+      <div style="margin-top:8px">
+        <div class="r"><span class="l">Order ID</span><span class="v mono">ord_7c2e4f...</span></div>
+        <div class="r"><span class="l">Payment</span><span class="v"><span class="bdg bdg-g">Done</span></span></div>
+        <div class="r"><span class="l">Created</span><span class="v">Feb 10, 2026</span></div>
+      </div>
+    </details>
+  </div>
+
+  <!-- Friction -->
+  <div class="sec">
+    <h4>Journey Friction</h4>
+    <div class="fr-r"><div class="fr-h"><span>🔄</span><span class="fr-c">Port-in</span><span class="fr-n">4×</span></div><div class="fr-d">port_submit_retry, port_check_status, port_resubmit, port_check_status</div></div>
+    <div class="fr-r"><div class="fr-h"><span>💳</span><span class="fr-c">Payment</span><span class="fr-n">2×</span></div><div class="fr-d">payment_method_update, payment_retry</div></div>
+  </div>
+
+  <!-- Comms Timeline -->
+  <div class="sec">
+    <h4>Comms Timeline</h4>
+    <div class="cm-r"><div class="cm-h"><span class="cm-dt">Feb 19</span><span class="cm-tp">🟣 Mochi — Port-in issue (escalated)</span></div></div>
+    <div class="cm-r"><div class="cm-h"><span class="cm-dt">Feb 17</span><span class="cm-tp">📧 Email — Number transfer inquiry</span></div></div>
+    <div class="cm-r"><div class="cm-h"><span class="cm-dt">Feb 15</span><span class="cm-tp">📧 Email — eSIM activation help (solved)</span></div></div>
+    <div class="cm-r"><div class="cm-h"><span class="cm-dt">Feb 10</span><span class="cm-tp">📦 Order created — Port-in + new plan</span></div></div>
+  </div>
+
+  <div style="display:flex;justify-content:space-between;align-items:center;padding-top:8px;font-size:11px;color:var(--tm);border-top:1px solid var(--bd)">
+    <span>Databricks + Boss API</span>
+    <button style="font-size:12px;color:var(--ap);background:none;border:none;cursor:pointer;font-weight:600">↻ Refresh</button>
+  </div>
+</div>
+
+<!-- ═══════════════════ TAB 3: SLA + ACTION LOG ═══════════════════ -->
+<div class="tc" id="tab-sla">
+
+  <div class="sla-m">
+    <span class="sla-b" style="background:var(--bgb);color:var(--blu)">Ticket #10849</span>
+    <span class="sla-b" style="background:var(--bga);color:var(--amb)">S2 — Major</span>
+    <span class="sla-b" style="background:var(--bgp);color:var(--pur)">L0 Direct</span>
+    <span class="sla-b" style="background:var(--bgg);color:var(--ts)">Open</span>
+  </div>
+  <div style="font-size:11px;color:var(--tp);margin-bottom:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Port-in rejected — PIN mismatch with T-Mobile</div>
+
+  <div class="sm">
+    <div class="sm-h"><span class="sm-l">1st Response</span><span class="sm-t" style="color:var(--grn)">✓ 12m (target: 30m)</span></div>
+    <div class="sm-bar"><div class="sm-f" style="width:100%;background:var(--grn)"></div></div>
+  </div>
+  <div class="sm">
+    <div class="sm-h"><span class="sm-l">Next Response</span><span class="sm-t" style="color:var(--red);animation:pulse 1.5s infinite">⚠ 6h 12m / 4h — BREACHED</span></div>
+    <div class="sm-bar"><div class="sm-f" style="width:100%;background:var(--red)"></div></div>
+  </div>
+  <div class="sm">
+    <div class="sm-h"><span class="sm-l">Resolution</span><span class="sm-t" style="color:var(--org)">3d 2h / 5d — 62%</span></div>
+    <div class="sm-bar"><div class="sm-f" style="width:62%;background:var(--org)"></div></div>
+  </div>
+
+  <div class="log-div" id="action-log">📋 Action Log</div>
+
+  <div class="log-e"><div class="log-ic lic-ok">✓</div><div style="flex:1"><div class="log-a">Port status checked</div><div class="log-r">REJECTED — PIN_MISMATCH (T-Mobile)</div><div class="log-n">Auto-note posted to #10849</div></div><div class="log-tm">2:34 PM</div></div>
+  <div class="log-e"><div class="log-ic lic-ok">✓</div><div style="flex:1"><div class="log-a">Customer identity verified</div><div class="log-r">Stripe + Boss API match confirmed</div><div class="log-n">Auto-note posted to #10849</div></div><div class="log-tm">2:33 PM</div></div>
+  <div class="log-e"><div class="log-ic lic-s">✉</div><div style="flex:1"><div class="log-a">Zara loaded — agent brief generated</div><div class="log-r">Problem: port-in rejection (high confidence)</div></div><div class="log-tm">2:33 PM</div></div>
+  <div style="text-align:center;padding:8px;font-size:10px;color:var(--tm)">— Session started 2:33 PM —</div>
+</div>
+
+<!-- ═══════════════════ TAB 4: AI QUERY ═══════════════════ -->
+<div class="tc" id="tab-ai" style="padding:12px">
+  <div class="ai">
+    <div class="ai-ms">
+      <div class="ai-m ast">
+        <div class="ai-av">✨</div>
+        <div class="ai-bd">I can help with Sarah's <strong>port-in, orders, eSIM, billing</strong>, and <strong>account details</strong>. What do you need?</div>
+      </div>
+      <div class="ai-m usr">
+        <div class="ai-av">👤</div>
+        <div class="ai-bd">What's the exact rejection reason for her port?</div>
+      </div>
+      <div class="ai-m ast">
+        <div class="ai-av">✨</div>
+        <div class="ai-bd"><strong>Port-in rejection details:</strong><br><br>The port request for (555) 867-5309 was rejected on Feb 16 with error <code style="font-size:11px;background:var(--sfs);padding:1px 4px;border-radius:3px">CONNECTX-ERR-DONOR-401</code> — PIN doesn't match T-Mobile records.<br><br>Account number ****4821 was validated, so only PIN needs correction.<br><br><em style="font-size:11px;color:var(--tm)">Source: Boss API → /order/getportstatus</em>
+        <div style="display:inline-flex;align-items:center;gap:4px;margin-top:6px;padding:3px 8px;background:var(--bgp);border:1px solid #E8DEF8;border-radius:4px;font-size:10px;color:var(--pur);font-weight:600">🔧 get_port_status</div></div>
+      </div>
+    </div>
+    <div class="ai-in">
+      <textarea placeholder="Ask about this customer..." rows="1"></textarea>
+      <button class="snd">➤</button>
+    </div>
+  </div>
+</div>
+
+</div>
+
+<script>
+function sw(id,b){document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));document.querySelectorAll('.tc').forEach(t=>t.classList.remove('on'));b.classList.add('on');document.getElementById('tab-'+id).classList.add('on')}
+function togU(){document.getElementById('ud').classList.toggle('vis');document.querySelector('.urg').classList.toggle('op')}
+function togS(id){document.getElementById(id).classList.toggle('vis')}
+function doCTA(b,t){b.classList.add('ld');b.textContent='⏳ Checking...';setTimeout(function(){b.classList.remove('ld');b.classList.add('ok');b.textContent='✓ Done';if(t==='port'){document.getElementById('cr1').style.display='block';aLog('Port status checked','REJECTED — PIN_MISMATCH (T-Mobile)',true)}else{var r=document.createElement('div');r.className='cta-r pnd';r.innerHTML='<strong>Port resubmitted</strong> — waiting for T-Mobile (1-2 days)<br><em>Internal note auto-posted to #10849</em>';b.parentElement.appendChild(r);aLog('Port-in resubmitted','Waiting for T-Mobile response',true)}},1200)}
+function doCombo(b){b.textContent='⏳ Sending...';b.style.opacity='.6';setTimeout(function(){b.textContent='✓ Sent + Noted + Closed';b.style.background='var(--grn)';b.style.opacity='1';aLog('Combo Send','Reply + Note + Status→Pending',true)},1500)}
+function aLog(a,r,n){var l=document.getElementById('action-log');if(!l)return;var e=document.createElement('div');e.className='log-e';var t=new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',hour12:true});e.innerHTML='<div class="log-ic lic-ok">✓</div><div style="flex:1"><div class="log-a">'+a+'</div>'+(r?'<div class="log-r">'+r+'</div>':'')+(n?'<div class="log-n">Auto-note posted to #10849</div>':'')+'</div><div class="log-tm">'+t+'</div>';l.after(e)}
+setTimeout(function(){document.getElementById('ld').style.display='none'},2000)
+</script>
+</body>
+</html>
