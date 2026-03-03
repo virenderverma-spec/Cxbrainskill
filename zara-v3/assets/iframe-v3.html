@@ -1,0 +1,3125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<title>Zara v3</title>
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+  font-size:13px;line-height:1.5;color:var(--text-primary);background:var(--surface);
+  overflow-x:hidden;
+}
+
+/* ── Loading ────────────────────────────────────────────── */
+.loading-bar{
+  height:3px;background:linear-gradient(90deg,#1F73B7,#7B1FA2,#1F73B7);
+  background-size:200%;animation:shimmer 1.5s infinite;
+  position:fixed;top:0;left:0;right:0;z-index:100;display:none;
+}
+.loading-bar.active{display:block;}
+@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+
+/* ── LOB Theme Variables ── */
+:root{--lob-color:#1F73B7;--lob-bg:#EDF7FF;}
+
+/* ── LOB Banner (demo style) ─────────────────────────────── */
+.lob-banner{
+  display:flex;align-items:center;gap:8px;padding:8px 14px;
+  background:var(--lob-bg);border-bottom:2px solid var(--lob-color);
+  font-size:11px;font-weight:700;color:var(--lob-color);
+  text-transform:uppercase;letter-spacing:.6px;
+}
+.lob-banner .lob-icon{font-size:16px;}
+.lob-banner .lob-tag{
+  margin-left:auto;font-size:10px;padding:2px 8px;border-radius:10px;
+  background:var(--lob-color);color:#FFF;font-weight:600;
+}
+
+/* ── LOB Badge (old — kept for compat but hidden by default) ─ */
+.lob-badge{
+  display:none;align-items:center;gap:8px;padding:8px 14px;
+  background:var(--lob-color, #6C5CE7);color:#fff;font-size:12px;font-weight:600;
+  border-radius:0;margin:0;
+}
+.lob-badge .lob-icon{font-size:16px;}
+.lob-badge .lob-name{flex:1;}
+.lob-badge .lob-plan{font-size:11px;opacity:.8;font-weight:400;}
+.lob-picker{
+  padding:10px 14px;background:var(--bg-amber);border-bottom:1px solid var(--border);
+  display:none;
+}
+.lob-picker label{font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;display:block;}
+.lob-picker select{
+  width:100%;padding:6px 8px;border:1px solid var(--border-strong);border-radius:4px;
+  font-size:13px;background:var(--surface);color:var(--text-primary);
+}
+
+/* ── Search ─────────────────────────────────────────────── */
+.ctx-search{display:flex;gap:6px;padding:12px 14px 0 14px;margin-bottom:0;}
+.ctx-search input{
+  flex:1;padding:7px 10px;border:1px solid var(--border-strong);border-radius:4px;font-size:13px;
+}
+.ctx-search button{
+  padding:7px 14px;background:var(--action-primary);color:#fff;border:none;border-radius:4px;
+  font-size:12px;font-weight:600;white-space:nowrap;
+}
+.ctx-search button:hover{background:var(--action-primary-hover);}
+.ctx-search button:disabled{background:var(--bg-disabled);cursor:not-allowed;}
+
+/* ── Tabs ───────────────────────────────────────────────── */
+.ci-tabs{
+  display:flex;border-bottom:1px solid var(--border);background:var(--surface-muted);
+}
+.ci-tab{
+  flex:1;padding:9px 8px;text-align:center;font-size:12px;font-weight:600;
+  color:var(--text-secondary);background:none;border:none;border-bottom:2px solid transparent;
+  cursor:pointer;transition:all .15s;
+}
+.ci-tab:hover{color:var(--lob-color);background:var(--lob-bg);}
+.ci-tab.active{color:var(--lob-color);border-bottom-color:var(--lob-color);background:var(--surface);}
+.ci-tab-content{display:none;padding:14px;}
+.ci-tab-content.active{display:block;}
+
+/* ── Context Sections ──────────────────────────────────── */
+.ctx-section{margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid var(--border-light);}
+.ctx-section:last-child{border-bottom:none;margin-bottom:0;padding-bottom:0;}
+.ctx-section h4{
+  font-size:11px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;
+  letter-spacing:.5px;margin-bottom:10px;display:flex;align-items:center;gap:6px;
+}
+.ctx-row{display:flex;justify-content:space-between;align-items:center;padding:3px 0;font-size:13px;}
+.ctx-row .lbl{color:var(--text-secondary);font-weight:500;}
+.ctx-row .val{color:var(--text-primary);font-weight:500;text-align:right;max-width:55%;word-break:break-word;}
+.ctx-row .val.mono{font-family:"SF Mono",Monaco,Consolas,monospace;font-size:11px;}
+.ctx-placeholder{
+  padding:20px;text-align:center;color:var(--text-muted);font-size:13px;
+  background:var(--surface-muted);border:1px dashed var(--border-strong);border-radius:6px;
+}
+
+/* ── Customer Compact Card ─────────────────────────────── */
+.customer-card{
+  padding:10px 12px;border-radius:6px;background:var(--surface-muted);border:1px solid var(--border);margin-bottom:12px;
+}
+.customer-card .cc-name{font-size:14px;font-weight:600;color:var(--text-primary);display:flex;align-items:center;gap:6px;}
+.customer-card .cc-row{display:flex;gap:12px;font-size:12px;color:var(--text-secondary);margin-top:3px;}
+.customer-card .cc-row span{display:flex;align-items:center;gap:3px;}
+
+/* ── Funnel Stage ──────────────────────────────────────── */
+.funnel{display:flex;gap:2px;margin-bottom:4px;}
+.funnel-step{
+  flex:1;padding:6px 4px;text-align:center;font-size:10px;font-weight:600;
+  border-radius:4px;background:var(--surface-sunken);color:var(--text-muted);position:relative;
+}
+.funnel-step.completed{background:var(--bg-green);color:var(--green);}
+.funnel-step.current{background:var(--bg-amber);color:var(--amber);box-shadow:0 0 0 2px #FFCC80;}
+.funnel-step.error{background:var(--bg-red);color:var(--red);box-shadow:0 0 0 2px #F8A0A8;}
+.funnel-step.pending{background:var(--surface-sunken);color:var(--text-muted);}
+.funnel-label{font-size:11px;color:var(--text-secondary);margin-top:4px;font-weight:500;}
+
+/* ── Badge ─────────────────────────────────────────────── */
+.badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;}
+.badge-green{background:var(--bg-green);color:var(--green);}
+.badge-amber{background:var(--bg-amber);color:var(--amber);}
+.badge-red{background:var(--bg-red);color:var(--red);}
+.badge-blue{background:var(--bg-blue);color:var(--blue);}
+.badge-gray{background:var(--bg-gray);color:var(--text-secondary);}
+.badge-purple{background:var(--bg-purple);color:var(--purple);}
+
+/* ── Hero Card LOB badge (inline) ────────────────────── */
+.hc-lob-badge{
+  display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:10px;
+  background:var(--lob-bg);color:var(--lob-color);font-size:10px;font-weight:700;
+}
+.hc-meta{display:flex;gap:10px;margin-top:6px;font-size:11px;}
+.hc-confidence{display:flex;align-items:center;gap:4px;}
+.hc-dot{width:7px;height:7px;border-radius:50%;}
+.confidence-high .hc-dot{background:var(--confidence-high);}
+.confidence-medium .hc-dot{background:var(--confidence-medium);}
+.confidence-low .hc-dot{background:var(--confidence-low);}
+.hc-source{font-size:10px;padding:1px 6px;border-radius:3px;background:var(--bg-purple);color:var(--purple);font-weight:600;}
+
+/* ── Diagnostic Sequence (demo style) ────────────────── */
+.diag-sequence{margin-bottom:14px;}
+.diag-header{
+  font-size:11px;font-weight:700;color:var(--lob-color);text-transform:uppercase;
+  letter-spacing:.5px;margin-bottom:8px;display:flex;align-items:center;gap:6px;
+}
+.diag-progress{font-size:10px;color:var(--text-secondary);font-weight:600;}
+.diag-step{
+  display:flex;align-items:flex-start;gap:10px;padding:8px 10px;
+  border-radius:6px;margin-bottom:4px;transition:all .2s;
+}
+.diag-step.step-completed{background:var(--urgency-low-bg);}
+.diag-step.step-current{background:var(--lob-bg);border:1px solid var(--lob-color);}
+.diag-step.step-locked{background:var(--surface-muted);opacity:.6;}
+.diag-step.step-skipped{background:var(--urgency-med-bg);}
+.diag-num{
+  width:22px;height:22px;border-radius:50%;display:flex;align-items:center;
+  justify-content:center;font-size:10px;font-weight:700;flex-shrink:0;
+}
+.step-completed .diag-num{background:var(--green);color:#FFF;}
+.step-current .diag-num{background:var(--lob-color);color:#FFF;}
+.step-locked .diag-num{background:var(--border-strong);color:#FFF;}
+.step-skipped .diag-num{background:var(--amber);color:#FFF;}
+.diag-step .diag-label{font-size:12px;font-weight:600;color:var(--text-primary);}
+.diag-step .diag-desc{font-size:11px;color:var(--text-secondary);margin-top:2px;}
+
+/* ── CTA Grid (demo style) ───────────────────────────── */
+.cta-section{margin-bottom:14px;}
+.cta-section-label{
+  font-size:11px;font-weight:700;color:var(--text-secondary);
+  text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;
+}
+.cta-grid{display:flex;flex-wrap:wrap;gap:6px;}
+.cta-btn{
+  display:flex;align-items:center;gap:6px;padding:8px 12px;border-radius:6px;
+  border:1px solid var(--border-strong);background:var(--surface);
+  font-size:12px;font-weight:600;color:var(--text-primary);
+  cursor:pointer;transition:all .2s;flex:0 0 auto;
+}
+.cta-btn:hover{border-color:var(--lob-color);background:var(--lob-bg);color:var(--lob-color);}
+.cta-btn.cta-done{border-color:var(--green);background:var(--bg-green);color:var(--green);cursor:default;}
+.cta-btn .cta-icon{font-size:14px;}
+.cta-btn .cta-status{font-size:10px;margin-left:4px;font-weight:700;}
+.cta-btn:disabled{opacity:.5;cursor:not-allowed;}
+
+/* ── CTA Result Card ─────────────────────────────────── */
+.cta-result{
+  margin-top:8px;padding:10px 12px;border-radius:6px;
+  border-left:3px solid var(--lob-color);background:var(--lob-bg);
+  font-size:12px;line-height:1.5;
+}
+.cta-result .cr-title{font-weight:700;color:var(--lob-color);margin-bottom:4px;}
+.cta-result .cr-row{display:flex;justify-content:space-between;padding:2px 0;}
+.cta-result .cr-label{color:var(--text-secondary);}
+.cta-result .cr-value{font-weight:600;color:var(--text-primary);}
+.cta-result .cr-alert{margin-top:6px;padding:6px 8px;border-radius:4px;font-weight:600;font-size:11px;}
+.cr-alert.alert-red{background:var(--bg-red);color:var(--red);border:1px solid #F8A0A8;}
+.cr-alert.alert-amber{background:var(--bg-amber);color:var(--amber);border:1px solid #FFCC80;}
+.cr-alert.alert-green{background:var(--bg-green);color:var(--green);border:1px solid #86CFAC;}
+
+/* ── Product Portfolio ───────────────────────────────── */
+.product-portfolio{margin-bottom:14px;}
+.pp-item{
+  display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:6px;
+  border:1px solid var(--border);margin-bottom:4px;font-size:12px;
+}
+.pp-item.pp-active{border-color:var(--lob-color);background:var(--lob-bg);}
+.pp-icon{font-size:16px;}
+.pp-plan{font-weight:600;color:var(--text-primary);flex:1;}
+.pp-status{font-size:11px;font-weight:600;}
+
+/* ── Actions Trail ───────────────────────────────────── */
+.trail-item{display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--border-light);font-size:12px;}
+.trail-dot{width:8px;height:8px;border-radius:50%;margin-top:5px;flex-shrink:0;}
+.trail-dot.td-zara{background:var(--lob-color);}
+.trail-dot.td-agent{background:var(--purple);}
+.trail-dot.td-system{background:var(--text-secondary);}
+.trail-body{flex:1;}
+.trail-summary{font-weight:600;color:var(--text-primary);}
+.trail-time{font-size:10px;color:var(--text-muted);margin-top:2px;}
+.trail-source{font-size:10px;padding:1px 6px;border-radius:3px;background:var(--bg-gray);color:var(--text-secondary);font-weight:600;}
+
+/* ── Triage Redesign — CSS Variables ──────────────────── */
+:root{
+  --confidence-high:#CC3340;--confidence-medium:#AD5E18;--confidence-low:#1F73B7;
+  --frustration-high:#CC3340;--frustration-med:#AD5E18;--frustration-low:#038153;
+  --action-primary:#1F73B7;--action-primary-hover:#155A8A;--action-send:#038153;--action-send-hover:#026B44;
+  --surface:#fff;--surface-muted:#FAFAFA;--surface-sunken:#F0F0F0;
+  --border:#E9EBED;--border-light:#F0F0F0;--border-strong:#D8DCDE;
+  --text-primary:#2F3941;--text-secondary:#68737D;--text-muted:#999;--text-meta:#87929D;
+  --bg-disabled:#C2C8CC;
+  --green:#038153;--red:#CC3340;--amber:#AD5E18;--blue:#1F73B7;--purple:#7B1FA2;
+  --orange:#C96400;--indigo:#7B68EE;--dark-amber:#C45500;--dark-purple:#6A27B8;
+  --bg-green:#D1E8DF;--bg-amber:#FFF4E0;--bg-red:#FFEEF0;--bg-blue:#EDF7FF;--bg-purple:#F3E8FF;--bg-gray:#F0F0F0;
+  --urgency-low-bg:#F6FDF9;--urgency-med-bg:#FFF8F0;--urgency-high-bg:#FFF0F0;
+  --chat-assistant-bg:#E8DEF8;--chat-user-body-bg:#EDF7FF;--chat-user-body-border:#C2DEFF;
+  --scrollbar-thumb:#D8DCDE;--line-through-color:#C2C8CC;--diag-border:#F5F5F5;
+}
+
+/* ── Hero Card ────────────────────────────────────────── */
+.hero-card{
+  padding:12px 14px;border-radius:8px;background:var(--surface);
+  border:1px solid var(--border);border-left:4px solid var(--lob-color);margin-bottom:10px;
+}
+.hero-card .hc-top{
+  display:flex;justify-content:space-between;align-items:center;
+}
+.hero-card .hc-name{font-size:15px;font-weight:700;color:var(--text-primary);display:flex;align-items:center;gap:6px;}
+.hero-card .hc-cohort-hint{font-size:11px;color:var(--text-secondary);margin-top:4px;}
+.hero-card .hc-problem{margin-top:8px;font-size:13px;font-weight:600;color:var(--text-primary);line-height:1.4;}
+.hero-card .hc-no-problem{font-size:13px;color:var(--text-muted);font-style:italic;margin-top:8px;}
+
+/* ── Urgency Strip ────────────────────────────────────── */
+.urgency-strip{
+  padding:8px 12px;border-radius:6px;font-size:12px;font-weight:500;
+  cursor:pointer;margin-bottom:10px;display:flex;align-items:center;gap:6px;
+  transition:all .15s;
+}
+.urgency-strip:hover{filter:brightness(.97);}
+.urgency-strip.frustration-low{
+  border-left:3px solid var(--frustration-low);background:var(--urgency-low-bg);color:var(--text-primary);
+}
+.urgency-strip.frustration-med{
+  border-left:3px solid var(--frustration-med);background:var(--urgency-med-bg);color:var(--text-primary);
+}
+.urgency-strip.frustration-high{
+  border-left:3px solid var(--frustration-high);background:var(--urgency-high-bg);color:var(--text-primary);
+}
+.urgency-strip .us-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+.frustration-low .us-dot{background:var(--frustration-low);}
+.frustration-med .us-dot{background:var(--frustration-med);}
+.frustration-high .us-dot{background:var(--frustration-high);}
+.urgency-strip .us-chevron{
+  margin-left:auto;font-size:10px;color:var(--text-muted);transition:transform .15s;
+}
+.urgency-strip.expanded .us-chevron{transform:rotate(180deg);}
+.urgency-contacts{display:none;margin-bottom:10px;}
+.urgency-contacts.visible{display:block;}
+
+/* ── Action Card ──────────────────────────────────────── */
+.action-card{
+  padding:14px;border-radius:8px;background:var(--surface);
+  border:1px solid var(--border);margin-bottom:10px;
+}
+.action-card .ac-header{display:flex;align-items:flex-start;gap:10px;margin-bottom:6px;}
+.action-card .ac-icon{
+  width:28px;height:28px;min-width:28px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;font-size:13px;
+}
+.action-card .ac-icon.type-investigate{background:var(--bg-blue);color:var(--blue);}
+.action-card .ac-icon.type-ask_info{background:var(--bg-amber);color:var(--amber);}
+.action-card .ac-icon.type-customer_action{background:var(--bg-green);color:var(--green);}
+.action-card .ac-icon.type-kb_article{background:var(--bg-purple);color:var(--purple);}
+.action-card .ac-text{font-size:13px;font-weight:600;color:var(--text-primary);flex:1;line-height:1.4;}
+.action-card .ac-result{font-size:12px;color:var(--text-secondary);margin-top:4px;line-height:1.4;}
+.action-card .action-btn{
+  width:100%;padding:9px 16px;margin-top:10px;border-radius:6px;
+  border:none;font-size:13px;font-weight:600;cursor:pointer;transition:background .15s;
+}
+.action-card .action-btn.btn-primary{background:var(--action-primary);color:#fff;}
+.action-card .action-btn.btn-primary:hover{background:var(--action-primary-hover);}
+.action-card .action-btn.btn-secondary{
+  background:var(--surface);color:var(--text-primary);border:1px solid var(--border-strong);
+}
+.action-card .action-btn.btn-secondary:hover{background:var(--surface-sunken);}
+.action-card .action-btn.btn-link{
+  background:none;color:var(--action-primary);padding:6px 0;text-align:left;
+}
+.action-card .action-btn.btn-link:hover{text-decoration:underline;}
+.remaining-steps{margin-bottom:10px;}
+.remaining-steps .rs-item{
+  display:flex;align-items:flex-start;gap:8px;padding:5px 0;font-size:12px;color:var(--text-primary);
+}
+.remaining-steps .rs-icon{
+  width:20px;height:20px;min-width:20px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;font-size:10px;
+}
+.remaining-steps .rs-icon.type-investigate{background:var(--bg-blue);color:var(--blue);}
+.remaining-steps .rs-icon.type-ask_info{background:var(--bg-amber);color:var(--amber);}
+.remaining-steps .rs-icon.type-customer_action{background:var(--bg-green);color:var(--green);}
+.remaining-steps .rs-icon.type-kb_article{background:var(--bg-purple);color:var(--purple);}
+.remaining-steps .rs-icon.type-ai_done{background:var(--bg-green);color:var(--green);}
+.remaining-steps .rs-text{flex:1;line-height:1.4;}
+.remaining-steps .rs-text a{color:var(--action-primary);text-decoration:none;}
+.remaining-steps .rs-text a:hover{text-decoration:underline;}
+.remaining-steps .rs-done{color:var(--text-secondary);text-decoration:line-through;text-decoration-color:var(--line-through-color);}
+.completed-toggle{
+  font-size:11px;color:var(--action-primary);background:none;border:none;
+  cursor:pointer;font-weight:600;padding:4px 0;
+}
+.completed-toggle:hover{text-decoration:underline;}
+.completed-steps{display:none;}
+.completed-steps.visible{display:block;}
+
+/* ── Section Label ────────────────────────────────────── */
+.section-label{
+  font-size:11px;font-weight:600;color:var(--text-secondary);margin-bottom:6px;
+}
+
+/* ── Draft Card ───────────────────────────────────────── */
+.draft-card{
+  padding:0;border-radius:8px;border:1px solid var(--border);
+  background:var(--surface-muted);overflow:hidden;margin-bottom:12px;
+}
+.draft-card .draft-label{
+  font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;
+  color:var(--text-secondary);padding:10px 14px 6px;display:flex;align-items:center;gap:6px;
+}
+.draft-card .draft-preview{
+  padding:8px 14px 10px;font-size:12px;line-height:1.5;color:var(--text-primary);
+  max-height:80px;overflow:hidden;white-space:pre-wrap;cursor:pointer;position:relative;
+}
+.draft-card .draft-preview::after{
+  content:'';position:absolute;bottom:0;left:0;right:0;height:30px;
+  background:linear-gradient(transparent,var(--surface-muted));pointer-events:none;
+}
+.draft-card .draft-preview.expanded{max-height:none;overflow:visible;}
+.draft-card .draft-preview.expanded::after{display:none;}
+.draft-card .draft-preview.hidden{display:none;}
+.draft-card .draft-actions{
+  display:flex;gap:6px;padding:8px 14px;border-top:1px solid var(--border);
+}
+.draft-card .draft-actions .btn-edit{
+  padding:6px 14px;border-radius:4px;font-size:12px;font-weight:600;cursor:pointer;
+  background:var(--surface-sunken);color:var(--text-primary);border:none;
+}
+.draft-card .draft-actions .btn-edit:hover{background:var(--border);}
+.draft-card .draft-actions .btn-send-reply{
+  padding:6px 14px;border:none;border-radius:4px;
+  background:var(--lob-color);color:#fff;font-size:12px;font-weight:600;cursor:pointer;
+}
+.draft-card .draft-actions .btn-send-reply:hover{opacity:.9;}
+.draft-card .draft-edit-area{display:none;padding:10px 14px;}
+.draft-card .draft-edit-area textarea{
+  width:100%;min-height:140px;padding:10px;border:1px solid #86EFAC;border-radius:6px;
+  font-size:13px;line-height:1.6;resize:vertical;font-family:inherit;color:#1a3a2a;
+  background:var(--surface);
+}
+.draft-card .draft-edit-area textarea:focus{outline:none;border-color:var(--green);box-shadow:0 0 0 3px rgba(3,129,83,.15);}
+.draft-card .draft-edit-area.active{display:block;}
+
+/* ── Escalation Package Card ─────────────────────────── */
+.escalation-card{
+  border-radius:10px;background:linear-gradient(135deg,#FFFBEB 0%,#FEF3C7 100%);
+  border:2px solid #FBBF24;border-left:4px solid #F59E0B;overflow:hidden;margin-bottom:12px;
+  box-shadow:0 2px 8px rgba(245,158,11,.12);
+}
+.escalation-card .escalation-label{
+  font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;
+  color:#92400E;padding:10px 14px 0;display:flex;align-items:center;gap:6px;
+}
+.escalation-card .escalation-label::before{content:'\u2709';font-size:14px;}
+.escalation-vendor-badge{
+  font-size:10px;font-weight:600;color:#fff;background:#F59E0B;
+  padding:2px 8px;border-radius:10px;margin-left:auto;
+}
+.escalation-card .esc-completeness{
+  padding:4px 14px 0;font-size:11px;color:#92400E;
+}
+.esc-triage-badge{
+  font-size:10px;color:#92400E;background:#FEF3C7;
+  padding:2px 8px;border-radius:10px;margin:4px 14px 0;display:inline-block;
+}
+.escalation-card .draft-preview{
+  padding:8px 14px 10px;font-size:13px;line-height:1.6;color:#451A03;
+  max-height:80px;overflow:hidden;white-space:pre-wrap;cursor:pointer;position:relative;
+}
+.escalation-card .draft-preview::after{
+  content:'';position:absolute;bottom:0;left:0;right:0;height:28px;
+  background:linear-gradient(transparent,#FEF3C7);pointer-events:none;
+}
+.escalation-card .draft-preview.expanded{max-height:none;overflow:visible;}
+.escalation-card .draft-preview.expanded::after{display:none;}
+.escalation-card .draft-preview.hidden{display:none;}
+.escalation-card .draft-edit-area{display:none;padding:10px 14px;}
+.escalation-card .draft-edit-area textarea{
+  width:100%;min-height:140px;padding:10px;border:1px solid #FBBF24;border-radius:6px;
+  font-size:13px;line-height:1.6;resize:vertical;font-family:inherit;color:#451A03;
+  background:#FFFBEB;
+}
+.escalation-card .draft-edit-area textarea:focus{outline:none;border-color:#F59E0B;box-shadow:0 0 0 3px rgba(245,158,11,.15);}
+.escalation-card .draft-edit-area.active{display:block;}
+.escalation-card .draft-actions{
+  display:flex;gap:8px;padding:10px 14px;border-top:1px solid #FDE68A;background:rgba(255,255,255,.5);
+}
+.escalation-card .draft-actions .btn-edit{
+  flex:1;padding:8px 12px;border:1px solid #FBBF24;border-radius:6px;
+  background:#FFFBEB;color:#92400E;font-size:12px;font-weight:600;cursor:pointer;
+}
+.escalation-card .draft-actions .btn-edit:hover{background:#FEF3C7;border-color:#F59E0B;}
+.escalation-card .draft-actions .btn-copy{
+  padding:8px 20px;border:none;border-radius:6px;
+  background:#F59E0B;color:#fff;font-size:12px;font-weight:700;cursor:pointer;
+  box-shadow:0 1px 3px rgba(245,158,11,.3);
+}
+.escalation-card .draft-actions .btn-copy:hover{background:#D97706;box-shadow:0 2px 6px rgba(245,158,11,.4);}
+
+/* ── Draft Verification Checklist ─────────────────────── */
+.draft-checklist{
+  padding:8px 14px;border-top:1px solid #BBF7D0;
+}
+.draft-facts{
+  display:flex;flex-wrap:wrap;gap:4px 6px;margin-bottom:4px;
+}
+.draft-fact{
+  font-size:11px;color:var(--green);background:#DCFCE7;
+  padding:2px 8px;border-radius:10px;font-weight:500;
+  white-space:nowrap;
+}
+.draft-flag{
+  font-size:11px;color:#92400E;background:#FEF3C7;
+  padding:4px 8px;border-radius:6px;margin-top:4px;
+  line-height:1.4;
+}
+.draft-sent{
+  text-align:center;color:var(--green);font-weight:600;
+  font-size:13px;padding:8px 0;
+}
+.draft-feedback{
+  padding:8px 14px;border-top:1px solid #E0E7FF;
+  display:flex;flex-wrap:wrap;gap:6px;align-items:center;
+}
+.feedback-learned{
+  font-size:11px;color:#4338CA;background:#EEF2FF;
+  padding:3px 10px;border-radius:10px;font-weight:500;
+}
+.feedback-kb{
+  font-size:10px;color:#6B7280;
+}
+
+/* ── Troubleshooting Progress ─────────────────────────── */
+.ts-card{
+  border-radius:8px;background:var(--surface);
+  border:1px solid var(--border);padding:12px 14px;margin-bottom:10px;
+}
+.ts-card .ts-header{
+  display:flex;align-items:center;gap:8px;margin-bottom:10px;
+}
+.ts-card .section-label{margin-bottom:0;}
+.ts-progress{display:flex;align-items:center;gap:8px;flex:1;}
+.ts-progress-bar{
+  flex:1;height:4px;background:var(--border);border-radius:2px;overflow:hidden;
+}
+.ts-progress-fill{
+  height:100%;background:var(--action-send);border-radius:2px;transition:width .3s;
+}
+.ts-progress-label{
+  font-size:11px;font-weight:600;color:var(--text-secondary);white-space:nowrap;
+}
+.ts-card .ts-step.next-pending{
+  border-left:3px solid var(--confidence-medium);padding-left:8px;margin-left:-3px;
+  background:var(--urgency-med-bg);border-radius:0 4px 4px 0;
+}
+
+/* ── Diagnostic Checklist ────────────────────────────── */
+.diag-item{
+  display:flex;align-items:flex-start;gap:10px;padding:7px 0;
+  border-bottom:1px solid var(--diag-border);font-size:13px;
+}
+.diag-item:last-child{border-bottom:none;}
+.diag-check{
+  width:20px;height:20px;min-width:20px;border-radius:4px;border:2px solid var(--border-strong);
+  display:flex;align-items:center;justify-content:center;font-size:11px;color:transparent;
+  margin-top:1px;flex-shrink:0;
+}
+.diag-item.checked .diag-check{background:var(--bg-green);border-color:var(--green);color:var(--green);}
+.diag-item.error .diag-check{background:var(--bg-red);border-color:var(--red);color:var(--red);}
+.diag-item.pending .diag-check{border-color:var(--border-strong);color:transparent;}
+.diag-body{flex:1;min-width:0;}
+.diag-label{font-size:12px;color:var(--text-secondary);font-weight:500;}
+.diag-item.checked .diag-label{color:var(--text-secondary);}
+.diag-item.error .diag-label{color:var(--red);font-weight:600;}
+.diag-value{
+  font-size:13px;font-weight:600;color:var(--text-primary);margin-top:1px;
+  word-break:break-word;
+}
+.diag-item.checked .diag-value{color:var(--text-primary);}
+.diag-item.error .diag-value{color:var(--red);}
+.diag-item.pending .diag-value{color:var(--text-muted);font-weight:400;font-style:italic;}
+.diag-value .mono{font-family:"SF Mono",Monaco,Consolas,monospace;font-size:11px;}
+
+/* ── Issue Info Card (triage intake fields) ────────────── */
+.issue-info-card{
+  border-radius:8px;background:var(--surface);
+  border:1px solid var(--border);padding:12px 14px;margin-bottom:10px;
+}
+.issue-info-header{
+  display:flex;align-items:center;gap:8px;margin-bottom:10px;
+}
+.issue-info-header .section-label{margin-bottom:0;}
+.issue-info-item{
+  display:flex;align-items:flex-start;gap:10px;padding:7px 0;
+  border-bottom:1px solid var(--diag-border);font-size:13px;
+}
+.issue-info-item:last-child{border-bottom:none;}
+.issue-info-icon{
+  width:20px;height:20px;min-width:20px;border-radius:4px;border:2px solid var(--border-strong);
+  display:flex;align-items:center;justify-content:center;font-size:11px;
+  margin-top:1px;flex-shrink:0;
+}
+.issue-info-item.needs-input .issue-info-icon{background:var(--bg-red);border-color:var(--red);color:var(--red);}
+.issue-info-item.auto-filled .issue-info-icon{background:var(--bg-green);border-color:var(--green);color:var(--green);}
+.issue-info-body{flex:1;min-width:0;}
+.issue-info-label{font-size:12px;font-weight:500;}
+.issue-info-item.needs-input .issue-info-label{color:var(--red);font-weight:600;}
+.issue-info-item.auto-filled .issue-info-label{color:var(--text-secondary);}
+.issue-info-val{font-size:12px;margin-top:1px;word-break:break-word;}
+.issue-info-item.needs-input .issue-info-val{color:var(--red);font-style:italic;font-weight:400;}
+.issue-info-item.auto-filled .issue-info-val{color:var(--text-primary);font-weight:600;}
+.issue-info-toggle{
+  font-size:11px;color:var(--text-secondary);cursor:pointer;padding:6px 0 2px;
+  user-select:none;
+}
+.issue-info-toggle:hover{color:var(--text-primary);}
+
+/* ── Legacy brief styles (kept for context tab) ───────── */
+.brief-problem{
+  padding:10px 14px;border-radius:6px;margin-bottom:12px;font-size:13px;font-weight:500;
+}
+.brief-problem .bp-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;opacity:.7;}
+.brief-problem .bp-stage{float:right;}
+
+.brief-contact{
+  padding:8px 10px;margin-bottom:6px;border-radius:6px;
+  background:var(--surface-muted);border:1px solid var(--border);
+}
+.brief-contact:last-child{margin-bottom:0;}
+.brief-contact .bc-header{
+  display:flex;align-items:center;gap:6px;margin-bottom:4px;
+}
+.brief-contact .bc-channel{
+  display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;
+  text-transform:uppercase;
+}
+.brief-contact .bc-channel.ch-email{background:var(--bg-blue);color:var(--blue);}
+.brief-contact .bc-channel.ch-mochi{background:var(--bg-purple);color:var(--purple);}
+.brief-contact .bc-status{font-size:10px;font-weight:600;}
+.brief-contact .bc-date{font-size:11px;color:var(--text-muted);margin-left:auto;white-space:nowrap;}
+.brief-contact .bc-summary{font-size:12px;color:var(--text-primary);line-height:1.5;}
+
+.brief-step{
+  display:flex;align-items:flex-start;gap:8px;padding:6px 0;font-size:13px;
+}
+.brief-step .bs-icon{
+  width:22px;height:22px;min-width:22px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;font-size:11px;
+}
+.brief-step .bs-icon.type-investigate{background:var(--bg-blue);color:var(--blue);}
+.brief-step .bs-icon.type-ask_info{background:var(--bg-amber);color:var(--amber);}
+.brief-step .bs-icon.type-customer_action{background:var(--bg-green);color:var(--green);}
+.brief-step .bs-icon.type-kb_article{background:var(--bg-purple);color:var(--purple);}
+.brief-step .bs-icon.type-ai_done{background:var(--bg-green);color:var(--green);}
+.brief-step .bs-text{flex:1;color:var(--text-primary);}
+.brief-step .bs-text a{color:var(--action-primary);text-decoration:none;font-size:12px;}
+.brief-step .bs-text a:hover{text-decoration:underline;}
+
+.brief-kv{display:flex;justify-content:space-between;padding:3px 0;font-size:13px;}
+.brief-kv .bk-label{color:var(--text-secondary);font-weight:500;}
+.brief-kv .bk-value{color:var(--text-primary);font-weight:500;text-align:right;max-width:60%;word-break:break-word;}
+
+/* ── Email Draft Widget ──────────────────────────────────── */
+.email-draft{background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden;}
+.email-draft-preview{
+  padding:12px 14px;font-size:13px;line-height:1.6;color:var(--text-primary);
+  max-height:120px;overflow:hidden;white-space:pre-wrap;cursor:pointer;
+  position:relative;
+}
+.email-draft-preview::after{
+  content:'';position:absolute;bottom:0;left:0;right:0;height:32px;
+  background:linear-gradient(transparent,var(--surface));pointer-events:none;
+}
+.email-draft-preview.expanded{max-height:none;overflow:visible;}
+.email-draft-preview.expanded::after{display:none;}
+.email-draft-actions{
+  display:flex;gap:6px;padding:8px 14px;border-top:1px solid var(--border);background:var(--surface-muted);
+}
+.email-draft-actions .btn-review{
+  flex:1;padding:7px 12px;border:1px solid var(--border-strong);border-radius:4px;
+  background:var(--surface);color:var(--text-primary);font-size:12px;font-weight:600;cursor:pointer;
+}
+.email-draft-actions .btn-review:hover{background:var(--surface-sunken);}
+.email-draft-actions .btn-send{
+  padding:7px 16px;border:none;border-radius:4px;
+  background:var(--action-send);color:#fff;font-size:12px;font-weight:600;cursor:pointer;
+}
+.email-draft-actions .btn-send:hover{background:var(--action-send-hover);}
+.email-draft-edit{display:none;padding:10px 14px;}
+.email-draft-edit textarea{
+  width:100%;min-height:140px;padding:10px;border:1px solid var(--border-strong);border-radius:6px;
+  font-size:13px;line-height:1.6;resize:vertical;font-family:inherit;color:var(--text-primary);
+}
+.email-draft-edit textarea:focus{outline:none;border-color:var(--action-primary);box-shadow:0 0 0 3px rgba(31,115,183,.12);}
+.email-draft-edit.active{display:block;}
+.email-draft-preview.hidden{display:none;}
+
+/* ── Contact Summary ─────────────────────────────────────── */
+.contact-summary{padding:10px 14px;border-radius:6px;font-size:13px;line-height:1.6;}
+.contact-summary.frustration-low{background:var(--urgency-low-bg);border:1px solid var(--bg-green);color:var(--text-primary);}
+.contact-summary.frustration-med{background:var(--urgency-med-bg);border:1px solid #FFE082;color:var(--text-primary);}
+.contact-summary.frustration-high{background:var(--urgency-high-bg);border:1px solid #F8A0A8;color:var(--text-primary);}
+.cs-count{font-weight:700;margin-bottom:4px;display:flex;align-items:center;gap:6px;}
+.cs-count .cs-dot{width:8px;height:8px;border-radius:50%;display:inline-block;}
+.frustration-low .cs-dot{background:var(--frustration-low);}
+.frustration-med .cs-dot{background:var(--frustration-med);}
+.frustration-high .cs-dot{background:var(--frustration-high);}
+.cs-body{color:var(--text-primary);}
+
+/* ── Troubleshooting Guide ──────────────────────────────── */
+.ts-step{
+  display:flex;align-items:flex-start;gap:10px;padding:8px 0;font-size:13px;
+  border-bottom:1px solid var(--border-light);
+}
+.ts-step:last-child{border-bottom:none;}
+.ts-check{
+  width:20px;height:20px;min-width:20px;border-radius:4px;border:2px solid var(--border-strong);
+  display:flex;align-items:center;justify-content:center;font-size:11px;color:transparent;
+  margin-top:1px;
+}
+.ts-step.done .ts-check{background:var(--bg-green);border-color:var(--green);color:var(--green);}
+.ts-step.done .ts-text{color:var(--text-secondary);text-decoration:line-through;text-decoration-color:var(--line-through-color);}
+.ts-text{flex:1;color:var(--text-primary);line-height:1.4;}
+.ts-source{font-size:10px;color:var(--text-muted);font-style:italic;margin-top:2px;}
+
+/* ── Escalation Panel ──────────────────────────────────── */
+.escalation-panel{
+  padding:10px 12px;border-radius:6px;margin-bottom:12px;
+  background:var(--urgency-med-bg);border:1px solid #FFE082;
+}
+.escalation-panel.urgent{background:var(--urgency-high-bg);border-color:#F8A0A8;}
+.escalation-panel .esc-title{
+  font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;
+  color:var(--amber);margin-bottom:6px;display:flex;align-items:center;gap:4px;
+}
+.escalation-panel.urgent .esc-title{color:var(--red);}
+.escalation-panel .esc-reason{
+  display:flex;align-items:flex-start;gap:6px;padding:3px 0;font-size:12px;color:var(--text-primary);
+}
+.escalation-panel .esc-dot{
+  min-width:6px;width:6px;height:6px;border-radius:50%;margin-top:5px;background:var(--amber);
+}
+.escalation-panel.urgent .esc-dot{background:var(--red);}
+.escalation-btn{
+  width:100%;padding:8px 14px;margin-top:8px;border-radius:6px;
+  font-size:12px;font-weight:600;cursor:pointer;text-align:center;
+  background:var(--surface);color:var(--red);border:1px solid #F8A0A8;transition:all .15s;
+}
+.escalation-btn:hover{background:var(--urgency-high-bg);}
+.escalation-btn:disabled{opacity:.5;cursor:not-allowed;}
+.escalation-result{
+  margin-top:8px;padding:8px;border:1px solid var(--border);border-radius:4px;
+  font-size:12px;background:var(--surface);min-height:60px;max-height:150px;
+  overflow-y:auto;white-space:pre-wrap;color:var(--text-primary);line-height:1.5;
+}
+
+/* ── Skill Block (collapsible) ─────────────────────────── */
+.skill-block{
+  background:var(--surface-muted);border:1px solid var(--border);border-radius:6px;
+  padding:8px 10px;margin-top:8px;
+}
+.skill-header{display:flex;align-items:center;gap:6px;cursor:pointer;}
+.skill-header .skill-icon{
+  width:18px;height:18px;min-width:18px;border-radius:4px;
+  background:linear-gradient(135deg,#7B1FA2,#1F73B7);color:#fff;
+  display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;
+}
+.skill-header .skill-title{font-size:11px;font-weight:600;color:var(--text-primary);flex:1;}
+.skill-header .skill-toggle{font-size:10px;color:var(--text-muted);transition:transform .15s;}
+.skill-block.collapsed .skill-body{display:none;}
+.skill-block.collapsed .skill-toggle{transform:rotate(-90deg);}
+.skill-step{display:flex;align-items:flex-start;gap:6px;padding:3px 0;font-size:11px;}
+.skill-step .ss-dot{min-width:6px;width:6px;height:6px;border-radius:50%;margin-top:5px;background:var(--blue);}
+.skill-step .ss-text{flex:1;color:var(--text-primary);line-height:1.4;}
+
+/* ── Show More Toggle ──────────────────────────────────── */
+.show-more-btn{
+  font-size:11px;color:var(--action-primary);background:none;border:none;cursor:pointer;
+  font-weight:600;padding:4px 0;
+}
+.show-more-btn:hover{text-decoration:underline;}
+
+/* ── Correspondence Summary ────────────────────────────── */
+.corr-item{
+  padding:10px 0;border-bottom:1px solid var(--border);
+}
+.corr-item:last-child{border-bottom:none;}
+.corr-header{
+  display:flex;align-items:center;gap:6px;margin-bottom:4px;
+}
+.corr-icon{font-size:13px;}
+.corr-subject{
+  font-size:12px;font-weight:600;color:var(--text-primary);flex:1;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.corr-status{
+  font-size:10px;font-weight:600;text-transform:uppercase;
+  padding:1px 6px;border-radius:8px;
+}
+.corr-status.cs-resolved{background:var(--bg-green);color:var(--green);}
+.corr-status.cs-open{background:var(--bg-amber);color:var(--amber);}
+.corr-status.cs-escalated{background:var(--bg-red);color:var(--red);}
+.corr-summary{
+  font-size:12px;color:var(--text-secondary);line-height:1.4;
+  margin-bottom:2px;
+}
+.corr-meta{font-size:11px;color:var(--text-muted);}
+
+/* ── Data Footer ───────────────────────────────────────── */
+.data-footer{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:8px 14px 0 14px;margin-top:8px;border-top:1px solid var(--border);
+  font-size:11px;color:var(--text-muted);
+}
+.data-footer button{
+  font-size:12px;color:var(--action-primary);background:none;border:none;cursor:pointer;font-weight:600;
+}
+.data-footer button:hover{text-decoration:underline;}
+
+/* ── KB Article ────────────────────────────────────────── */
+.kb-article{
+  display:flex;align-items:center;gap:8px;padding:6px 8px;margin-bottom:4px;
+  border-radius:4px;background:var(--surface-muted);border:1px solid var(--border);font-size:12px;
+}
+.kb-article a{color:var(--action-primary);text-decoration:none;flex:1;}
+.kb-article a:hover{text-decoration:underline;}
+.kb-article .kb-source{font-size:10px;font-weight:600;color:var(--text-secondary);white-space:nowrap;}
+
+/* ── AI Query Tab ──────────────────────────────────────── */
+.ai-chat{
+  border:1px solid var(--border);border-radius:8px;overflow:hidden;background:var(--surface);
+  display:flex;flex-direction:column;height:calc(100vh - 100px);
+}
+.ai-messages{flex:1;overflow-y:auto;padding:12px;background:var(--surface-muted);}
+.ai-msg{display:flex;gap:8px;margin-bottom:14px;}
+.ai-msg .ai-av{
+  width:28px;height:28px;min-width:28px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;font-size:14px;
+}
+.ai-msg.assistant .ai-av{background:var(--chat-assistant-bg);color:var(--purple);}
+.ai-msg.user .ai-av{background:var(--bg-green);color:var(--green);}
+.ai-msg .ai-body{
+  flex:1;padding:8px 12px;border-radius:8px;font-size:13px;line-height:1.5;min-width:0;
+}
+.ai-msg.assistant .ai-body{background:var(--surface);border:1px solid var(--border);}
+.ai-msg.user .ai-body{background:var(--chat-user-body-bg);border:1px solid var(--chat-user-body-border);}
+.ai-body ul{margin:6px 0 0 16px;font-size:12px;}
+.ai-body li{margin-bottom:2px;}
+.ai-body .thinking{color:var(--text-muted);font-style:italic;font-size:12px;}
+
+.ai-input-row{display:flex;border-top:1px solid var(--border);}
+.ai-input-row textarea{
+  flex:1;padding:10px 12px;border:none;font-size:13px;resize:none;
+  min-height:38px;max-height:80px;line-height:1.4;font-family:inherit;
+}
+.ai-input-row textarea:focus{outline:none;}
+.ai-input-row .send-btn{
+  padding:0 14px;background:var(--action-primary);color:#fff;border:none;font-weight:700;
+  font-size:14px;cursor:pointer;
+}
+.ai-input-row .send-btn:hover{background:var(--action-primary-hover);}
+.ai-input-row .send-btn:disabled{background:var(--bg-disabled);cursor:not-allowed;}
+
+/* ── Tools Badge ───────────────────────────────────────── */
+.tools-badge{
+  display:inline-flex;align-items:center;gap:4px;margin-top:6px;padding:3px 8px;
+  background:var(--bg-purple);border:1px solid var(--chat-assistant-bg);border-radius:4px;
+  font-size:10px;color:var(--purple);font-weight:600;
+}
+
+/* ── Loading Dots ──────────────────────────────────────── */
+@keyframes pulse-dots{0%,80%,100%{opacity:.3}40%{opacity:1}}
+.loading-dots span{
+  display:inline-block;width:6px;height:6px;margin:0 2px;
+  background:var(--purple);border-radius:50%;animation:pulse-dots 1.4s infinite;
+}
+.loading-dots span:nth-child(2){animation-delay:.2s;}
+.loading-dots span:nth-child(3){animation-delay:.4s;}
+
+/* ── Scrollbars ────────────────────────────────────────── */
+::-webkit-scrollbar{width:5px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:var(--scrollbar-thumb);border-radius:3px;}
+
+/* ── SLA Tab ─────────────────────────────────────────────── */
+.sla-meta{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;}
+.sla-badge{font-size:10px;padding:3px 8px;border-radius:10px;font-weight:600;}
+.sla-badge-blue{background:var(--bg-blue);color:var(--blue);}
+.sla-badge-orange{background:var(--bg-amber);color:var(--orange);}
+.sla-badge-purple{background:var(--bg-purple);color:var(--dark-purple);}
+.sla-badge-gray{background:var(--bg-gray);color:var(--text-secondary);}
+.sla-badge-green{background:var(--bg-green);color:var(--green);}
+.sla-badge-red{background:var(--bg-red);color:var(--red);}
+.sla-badge-amber{background:var(--bg-amber);color:var(--orange);}
+.sla-badge-yellow{background:var(--bg-amber);color:var(--amber);}
+.sla-ticket-subject{font-size:11px;color:var(--text-primary);margin:6px 0 10px;line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.sla-ticket-age{font-size:10px;color:var(--text-meta);margin-bottom:10px;}
+.sla-partner-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;margin-bottom:8px;border-bottom:1px solid var(--border);}
+.sla-partner-label{font-size:11px;font-weight:600;color:var(--text-secondary);}
+.sla-divider{height:1px;background:var(--border);margin:12px 0;}
+.sla-metric{margin-bottom:12px;}
+.sla-metric:last-child{margin-bottom:0;}
+.sla-metric-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;}
+.sla-metric-lbl{font-size:11px;font-weight:500;color:var(--text-secondary);}
+.sla-metric-time{font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;}
+.sla-bar-bg{height:6px;background:var(--border);border-radius:3px;overflow:hidden;}
+.sla-bar-fill{height:100%;border-radius:3px;transition:width 1s linear;min-width:2px;}
+.sla-st-green .sla-bar-fill{background:var(--green);}
+.sla-st-green .sla-metric-time{color:var(--green);}
+.sla-st-amber .sla-bar-fill{background:var(--orange);}
+.sla-st-amber .sla-metric-time{color:var(--orange);}
+.sla-st-red .sla-bar-fill{background:var(--red);}
+.sla-st-red .sla-metric-time{color:var(--red);}
+.sla-st-breached .sla-bar-fill{background:var(--red);}
+.sla-st-breached .sla-metric-time{color:var(--red);animation:sla-pulse 1.5s infinite;}
+.sla-st-breached .sla-metric-lbl{color:var(--red);font-weight:600;}
+.sla-st-met .sla-bar-fill{background:var(--green);}
+.sla-st-met .sla-metric-time{color:var(--green);}
+@keyframes sla-pulse{0%,100%{opacity:1}50%{opacity:.5}}
+
+/* ── Dark Mode ──────────────────────────────────────────── */
+@media (prefers-color-scheme: dark) {
+  :root{
+    --surface:#1a1a2e;--surface-muted:#16213e;--surface-sunken:#121228;
+    --border:#2a2a4a;--border-light:#252540;--border-strong:#3a3a5a;
+    --text-primary:#e0e0e0;--text-secondary:#a0a0b0;--text-muted:#707080;--text-meta:#808098;
+    --bg-disabled:#3a3a5a;--scrollbar-thumb:#3a3a5a;--line-through-color:#505060;--diag-border:#252540;
+    --green:#34d399;--red:#f87171;--amber:#fbbf24;--blue:#60a5fa;--purple:#c084fc;
+    --orange:#fb923c;--indigo:#a78bfa;--dark-amber:#f59e0b;--dark-purple:#a78bfa;
+    --bg-green:#0a3d2a;--bg-amber:#3d2a0a;--bg-red:#3d1a1a;--bg-blue:#0a1a3d;--bg-purple:#2d1a4d;--bg-gray:#2a2a3e;
+    --urgency-low-bg:#0a2d1a;--urgency-med-bg:#2d1a0a;--urgency-high-bg:#2d0a0a;
+    --chat-assistant-bg:#2d1a4d;--chat-user-body-bg:#0a1a3d;--chat-user-body-border:#1a2a5a;
+    --action-primary:#60a5fa;--action-primary-hover:#93c5fd;--action-send:#34d399;--action-send-hover:#6ee7b7;
+    --confidence-high:#f87171;--confidence-medium:#fbbf24;--confidence-low:#60a5fa;
+    --frustration-high:#f87171;--frustration-med:#fbbf24;--frustration-low:#34d399;
+  }
+  .loading-bar{background:linear-gradient(90deg,#60a5fa,#c084fc,#60a5fa);background-size:200%;}
+  .funnel-step.current{box-shadow:0 0 0 2px rgba(251,191,36,.4);}
+  .funnel-step.error{box-shadow:0 0 0 2px rgba(248,113,113,.4);}
+  .draft-card{background:linear-gradient(135deg,#0a2d1a 0%,#0d3320 100%);border-color:#1a5c3a;}
+  .draft-card .draft-label{color:var(--green);}
+  .draft-card .draft-preview{color:#c0e0d0;}
+  .draft-card .draft-preview::after{background:linear-gradient(transparent,#0d3320);}
+  .draft-card .draft-actions{border-top-color:#1a5c3a;background:rgba(0,0,0,.2);}
+  .draft-card .draft-actions .btn-edit{border-color:#1a5c3a;background:var(--surface);color:var(--green);}
+  .draft-card .draft-actions .btn-send-reply{background:var(--action-send);color:#000;}
+  .draft-card .draft-edit-area textarea{border-color:#1a5c3a;background:var(--surface);color:var(--text-primary);}
+  .escalation-card{background:linear-gradient(135deg,#2d1a0a 0%,#33200d 100%);border-color:#7a5a2a;border-left-color:#F59E0B;}
+  .escalation-card .escalation-label{color:var(--amber);}
+  .escalation-vendor-badge{background:#B45309;color:#FEF3C7;}
+  .escalation-card .esc-completeness{color:var(--amber);}
+  .esc-triage-badge{background:#B45309;color:#FEF3C7;}
+  .escalation-card .draft-preview{color:#e0d0c0;}
+  .escalation-card .draft-preview::after{background:linear-gradient(transparent,#33200d);}
+  .escalation-card .draft-actions{border-top-color:#7a5a2a;background:rgba(0,0,0,.2);}
+  .escalation-card .draft-actions .btn-edit{border-color:#7a5a2a;background:var(--surface);color:var(--amber);}
+  .escalation-card .draft-actions .btn-copy{background:#D97706;color:#fff;}
+  .escalation-card .draft-edit-area textarea{border-color:#7a5a2a;background:var(--surface);color:var(--text-primary);}
+  .draft-checklist{border-top-color:#1a5c3a;}
+  .draft-fact{color:var(--green);background:#0a3d2a;}
+  .draft-flag{color:var(--amber);background:#3d2a0a;}
+  .draft-feedback{border-top-color:#2a2a5a;}
+  .feedback-learned{color:var(--indigo);background:#1a1a4d;}
+  .feedback-kb{color:var(--text-secondary);}
+  .draft-sent{color:var(--green);}
+  .contact-summary.frustration-low{background:var(--urgency-low-bg);border-color:#1a5c3a;color:var(--text-primary);}
+  .contact-summary.frustration-med{background:var(--urgency-med-bg);border-color:#7a5a2a;color:var(--text-primary);}
+  .contact-summary.frustration-high{background:var(--urgency-high-bg);border-color:rgba(248,113,113,.3);color:var(--text-primary);}
+  .cs-body{color:var(--text-primary);}
+  .ts-step{border-bottom-color:var(--border-light);}
+  .ts-check{border-color:var(--border-strong);}
+  .ts-step.done .ts-check{background:var(--bg-green);border-color:var(--green);color:var(--green);}
+  .ts-step.done .ts-text{color:var(--text-secondary);text-decoration-color:var(--line-through-color);}
+  .ts-text{color:var(--text-primary);}
+  .ts-source{color:var(--text-muted);}
+  .escalation-panel{background:var(--urgency-med-bg);border-color:#7a5a2a;}
+  .escalation-panel.urgent{background:var(--urgency-high-bg);border-color:rgba(248,113,113,.3);}
+  .escalation-panel .esc-title{color:var(--amber);}
+  .escalation-panel.urgent .esc-title{color:var(--red);}
+  .escalation-panel .esc-reason{color:var(--text-primary);}
+  .escalation-panel .esc-dot{background:var(--amber);}
+  .escalation-panel.urgent .esc-dot{background:var(--red);}
+  .escalation-btn{background:var(--surface);color:var(--red);border-color:rgba(248,113,113,.3);}
+  .escalation-btn:hover{background:var(--urgency-high-bg);}
+  .escalation-result{border-color:var(--border);background:var(--surface);color:var(--text-primary);}
+  .skill-block{background:var(--surface-muted);border-color:var(--border);}
+  .skill-header .skill-title{color:var(--text-primary);}
+  .skill-header .skill-toggle{color:var(--text-muted);}
+  .skill-step .ss-dot{background:var(--blue);}
+  .skill-step .ss-text{color:var(--text-primary);}
+  .show-more-btn{color:var(--action-primary);}
+  .email-draft{background:var(--surface);border-color:var(--border);}
+  .email-draft-preview{color:var(--text-primary);}
+  .email-draft-preview::after{background:linear-gradient(transparent,var(--surface));}
+  .email-draft-actions{border-top-color:var(--border);background:var(--surface-muted);}
+  .email-draft-actions .btn-review{border-color:var(--border-strong);background:var(--surface);color:var(--text-primary);}
+  .email-draft-actions .btn-send{background:var(--action-send);color:#000;}
+  .email-draft-edit textarea{border-color:var(--border-strong);color:var(--text-primary);background:var(--surface);}
+  .kb-article{background:var(--surface-muted);border-color:var(--border);}
+  .kb-article a{color:var(--action-primary);}
+  .kb-article .kb-source{color:var(--text-secondary);}
+  .ai-input-row textarea{background:var(--surface);color:var(--text-primary);}
+  .sla-badge,.sla-badge-gray{background:var(--bg-gray);color:var(--text-secondary);}
+  .sla-badge-blue{background:var(--bg-blue);color:var(--blue);}
+  .sla-badge-orange,.sla-badge-amber{background:var(--bg-amber);color:var(--amber);}
+  .sla-badge-purple{background:var(--bg-purple);color:var(--purple);}
+  .sla-badge-green{background:var(--bg-green);color:var(--green);}
+  .sla-badge-red{background:var(--bg-red);color:var(--red);}
+  .sla-badge-yellow{background:#3d2a0a;color:var(--amber);}
+  .sla-ticket-subject{color:var(--text-primary);}
+  .sla-ticket-age{color:var(--text-meta);}
+  .brief-step .bs-icon.type-investigate{background:var(--bg-blue);color:var(--blue);}
+  .brief-step .bs-icon.type-ask_info{background:var(--bg-amber);color:var(--amber);}
+  .brief-step .bs-icon.type-customer_action{background:var(--bg-green);color:var(--green);}
+  .brief-step .bs-icon.type-kb_article{background:var(--bg-purple);color:var(--purple);}
+  .brief-step .bs-icon.type-ai_done{background:var(--bg-green);color:var(--green);}
+  .brief-step .bs-text{color:var(--text-primary);}
+  .brief-step .bs-text a{color:var(--action-primary);}
+  .brief-kv .bk-label{color:var(--text-secondary);}
+  .brief-kv .bk-value{color:var(--text-primary);}
+  .corr-status.cs-resolved{background:var(--bg-green);color:var(--green);}
+  .corr-status.cs-open{background:var(--bg-amber);color:var(--amber);}
+  .corr-status.cs-escalated{background:var(--bg-red);color:var(--red);}
+}
+[data-theme="dark"]{
+  --surface:#1a1a2e;--surface-muted:#16213e;--surface-sunken:#121228;
+  --border:#2a2a4a;--border-light:#252540;--border-strong:#3a3a5a;
+  --text-primary:#e0e0e0;--text-secondary:#a0a0b0;--text-muted:#707080;--text-meta:#808098;
+  --bg-disabled:#3a3a5a;--scrollbar-thumb:#3a3a5a;--line-through-color:#505060;--diag-border:#252540;
+  --green:#34d399;--red:#f87171;--amber:#fbbf24;--blue:#60a5fa;--purple:#c084fc;
+  --orange:#fb923c;--indigo:#a78bfa;--dark-amber:#f59e0b;--dark-purple:#a78bfa;
+  --bg-green:#0a3d2a;--bg-amber:#3d2a0a;--bg-red:#3d1a1a;--bg-blue:#0a1a3d;--bg-purple:#2d1a4d;--bg-gray:#2a2a3e;
+  --urgency-low-bg:#0a2d1a;--urgency-med-bg:#2d1a0a;--urgency-high-bg:#2d0a0a;
+  --chat-assistant-bg:#2d1a4d;--chat-user-body-bg:#0a1a3d;--chat-user-body-border:#1a2a5a;
+  --action-primary:#60a5fa;--action-primary-hover:#93c5fd;--action-send:#34d399;--action-send-hover:#6ee7b7;
+  --confidence-high:#f87171;--confidence-medium:#fbbf24;--confidence-low:#60a5fa;
+  --frustration-high:#f87171;--frustration-med:#fbbf24;--frustration-low:#34d399;
+}
+/* ── CSS classes for JS inline styles ───────────────────── */
+.section-heading{font-size:11px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;cursor:pointer;letter-spacing:.5px;}
+.step-source{font-size:10px;color:var(--text-muted);font-style:italic;margin-top:1px;}
+.step-result{font-size:11px;color:var(--text-muted);margin-top:1px;}
+.step-source-link{font-size:10px;color:var(--text-muted);font-style:italic;margin-top:1px;text-decoration:none;}
+.sev-high{font-size:11px;font-weight:700;color:var(--red);}
+.sev-med{font-size:11px;font-weight:700;color:var(--amber);}
+.sev-low{font-size:11px;font-weight:700;color:var(--text-secondary);}
+.friction-row{padding:5px 0;border-bottom:1px solid var(--border-light);}
+.friction-header{display:flex;align-items:center;gap:6px;}
+.friction-category{font-weight:600;color:var(--text-primary);}
+.friction-detail{font-size:11px;color:var(--text-meta);margin-top:2px;padding-left:25px;}
+.comms-row{padding:6px 0;border-bottom:1px solid var(--border-light);}
+.comms-header{display:flex;gap:8px;align-items:baseline;}
+.comms-date{font-size:11px;color:var(--text-meta);min-width:70px;flex-shrink:0;}
+.comms-topic{font-size:12px;font-weight:600;color:var(--text-primary);}
+.urgency-detail{padding:8px 12px;font-size:12px;line-height:1.6;color:var(--text-primary);}
+.error-text{color:var(--red);}
+.link-inherit{color:inherit;text-decoration:none;}
+.more-contacts{font-size:11px;color:var(--text-muted);padding:4px 0;}
+.first-contact-hint{font-size:12px;color:var(--text-muted);padding:4px 0;}
+.sla-not-configured{color:var(--text-meta);}
+.action-card.action-done{background:var(--bg-green);border-color:var(--green);}
+.action-card.action-done .ac-text{color:var(--green);font-weight:600;}
+.action-card.action-done .ac-result{color:var(--text-secondary);}
+.draft-status-badge{font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;margin-left:auto;}
+.draft-status-badge.status-ready{background:var(--bg-green);color:var(--green);}
+.draft-status-badge.status-review{background:var(--bg-amber);color:var(--amber);}
+.draft-verification{padding:8px 14px;margin-top:-8px;margin-bottom:12px;}
+
+/* ── v3.0: Version Badge ─────────────────────────────────── */
+.ci-tabs{position:relative;}
+.version-badge{position:absolute;top:4px;right:6px;font-size:9px;font-weight:700;color:#fff;background:var(--text-secondary);padding:2px 7px;border-radius:8px;z-index:2;pointer-events:none;}
+</style>
+</head>
+<body>
+
+<div class="loading-bar" id="loading-bar"></div>
+
+<!-- v3: LOB Banner (shown when LOB is detected) -->
+<div id="lob-banner" class="lob-banner" style="display:none">
+  <span class="lob-icon" id="lob-icon"></span>
+  <span id="lob-name"></span>
+  <span class="lob-tag" id="lob-tag"></span>
+</div>
+
+<!-- v3: LOB Picker (shown when LOB cannot be auto-detected) -->
+<div id="lob-picker" class="lob-picker" style="display:none">
+  <label>Select product line:</label>
+  <select id="lob-select" onchange="setLob(this.value)">
+    <option value="">-- Select LOB --</option>
+  </select>
+</div>
+
+<!-- Search bar (visible in dev mode, hidden in ZAF mode) -->
+<div class="ctx-search" id="search-bar" style="display:none;">
+  <input type="text" id="ctx-search-input" placeholder="Enter customer email...">
+  <button id="ctx-search-btn" onclick="searchCustomer()">Look Up</button>
+</div>
+
+<!-- Tabs -->
+<div class="ci-tabs">
+  <button class="ci-tab active" onclick="switchTab('agent-brief',this)">Triage</button>
+  <button class="ci-tab" onclick="switchTab('context',this)">Context</button>
+  <button class="ci-tab" onclick="switchTab('sla',this)">SLA & Actions</button>
+  <button class="ci-tab" onclick="switchTab('ai-query',this)">AI Query</button>
+  <span class="version-badge">v3.0</span>
+</div>
+
+<!-- ========== TAB 1: AGENT BRIEF (default) ========== -->
+<div class="ci-tab-content active" id="tab-agent-brief">
+  <div id="agent-brief-data">
+    <div class="ctx-placeholder">Loading agent brief...</div>
+  </div>
+</div>
+
+<!-- ========== TAB 2: CONTEXT ========== -->
+<div class="ci-tab-content" id="tab-context">
+  <div id="ctx-data">
+    <div class="ctx-placeholder">Loading customer context...</div>
+  </div>
+  <div class="data-footer">
+    <span>Databricks + Boss API</span>
+    <button onclick="refreshAll()">&#x21BB; Refresh</button>
+  </div>
+</div>
+
+<!-- ========== TAB 3: SLA ========== -->
+<div class="ci-tab-content" id="tab-sla">
+  <div id="sla-data">
+    <div class="ctx-placeholder">Loading SLA data...</div>
+  </div>
+</div>
+
+<!-- ========== TAB 4: AI QUERY ========== -->
+<div class="ci-tab-content" id="tab-ai-query">
+  <div class="ai-chat">
+    <div class="ai-messages" id="ai-messages">
+      <div class="ai-msg assistant" id="ai-greeting">
+        <div class="ai-av">&#x2728;</div>
+        <div class="ai-body" id="ai-greeting-text">
+          I can help with this customer's <strong>account, orders, eSIM setup, billing, port-in status</strong>, and <strong>troubleshooting</strong>. What do you need?
+        </div>
+      </div>
+    </div>
+    <div class="ai-input-row">
+      <textarea id="ai-input" placeholder="Ask about this customer's account, orders, or issues..." rows="1" onkeydown="handleAIKey(event)"></textarea>
+      <button class="send-btn" id="send-btn" onclick="sendAI()">&#x27A4;</button>
+    </div>
+  </div>
+</div>
+
+<!-- ZAF SDK -->
+<script src="https://static.zdassets.com/zendesk_app_framework_sdk/2.0/zaf_sdk.min.js"></script>
+<script>
+// ── State ────────────────────────────────────────────────────
+var client;
+var serverUrl = '';
+var requesterEmail = '';
+var isLoading = false;
+var sessionId = 'zaf-' + Date.now();
+var lookupData = null;
+var briefData = null;
+// v3: LOB state
+var currentLob = null;  // { lobId, displayName, shortName, color, icon }
+var lobRegistry = [];   // all LOBs from /api/lob/registry
+
+// ── Debug panel helper ──────────────────────────────────────
+var _dbgLines = [];
+function dbg(msg) {
+  console.log('[Zara v3] ' + msg);
+  _dbgLines.push('[' + new Date().toLocaleTimeString() + '] ' + msg);
+  var el = document.getElementById('dbg-panel');
+  if (el) el.textContent = _dbgLines.join('\n');
+}
+
+// ── ZAF-aware fetch: use client.request() when inside ZAF ──
+function zaraFetch(url, opts) {
+  if (client && client.request) {
+    var reqOpts = { url: url, type: (opts && opts.method) || 'GET', contentType: 'application/json', dataType: 'json' };
+    if (opts && opts.body) reqOpts.data = opts.body;
+    return client.request(reqOpts).then(function(data) {
+      return { ok: true, status: 200, json: function() { return Promise.resolve(data); } };
+    }).catch(function(err) {
+      var msg = 'ZAF request failed: ';
+      if (err && err.responseText) msg += err.status + ' ' + err.responseText;
+      else if (err && err.message) msg += err.message;
+      else msg += JSON.stringify(err);
+      dbg(msg);
+      throw new Error(msg);
+    });
+  }
+  return fetch(url, opts);
+}
+
+// ── Initialize ZAF ──────────────────────────────────────────
+try {
+  client = ZAFClient.init();
+  dbg('ZAF client initialized');
+  client.invoke('resize', { width: '100%', height: '600px' });
+
+  // Detect Zendesk dark mode
+  client.get('currentUser.preferences.colorScheme').then(function(data) {
+    var scheme = data['currentUser.preferences.colorScheme'];
+    if (scheme === 'dark' || (scheme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+      document.documentElement.setAttribute('data-theme', 'dark');
+    }
+  }).catch(function() { /* colorScheme pref not available */ });
+
+  // IMPORTANT: Wait for metadata (serverUrl) before loading ticket data
+  // This prevents race condition where loadAll fires before serverUrl is set
+  client.metadata().then(function(metadata) {
+    serverUrl = (metadata.settings && metadata.settings.server_url) || 'http://localhost:3000';
+    serverUrl = serverUrl.replace(/\/+$/, '');
+    dbg('Server URL: ' + serverUrl);
+    document.getElementById('agent-brief-data').innerHTML = '<div class="ctx-placeholder">Connecting to ' + serverUrl + '...</div>';
+
+    // v3: Load LOB registry for picker
+    loadLobRegistry();
+
+    // NOW load ticket data (after serverUrl is set)
+    return client.get(['ticket.requester.email', 'ticket.id']);
+  }).then(function(data) {
+    requesterEmail = data['ticket.requester.email'];
+    dbg('Requester email: ' + (requesterEmail || '(none)'));
+    if (requesterEmail) {
+      loadAll(requesterEmail);
+    } else {
+      showPlaceholder('agent-brief-data', 'No requester email found on this ticket.');
+      showPlaceholder('ctx-data', 'No requester email found on this ticket.');
+    }
+  }).catch(function(err) {
+    dbg('Init error: ' + (err.message || String(err)));
+    showPlaceholder('agent-brief-data', 'Could not read ticket data. Is this running inside Zendesk?');
+    showPlaceholder('ctx-data', 'Could not read ticket data.');
+  });
+
+  client.on('ticket.requester.email.changed', function(email) {
+    if (email && email !== requesterEmail) {
+      requesterEmail = email;
+      loadAll(requesterEmail);
+    }
+  });
+} catch (e) {
+  serverUrl = window.location.origin || 'http://localhost:3000';
+  document.getElementById('search-bar').style.display = 'flex';
+  showPlaceholder('agent-brief-data', 'Enter a customer email above to load the agent brief.');
+  showPlaceholder('ctx-data', 'Enter a customer email above to load context.');
+  showPlaceholder('sla-data', 'Enter a customer email above to load SLA data.');
+  // v3: Load LOB registry for picker
+  loadLobRegistry();
+}
+
+function searchCustomer() {
+  var input = document.getElementById('ctx-search-input');
+  var email = input.value.trim();
+  if (!email) return;
+  requesterEmail = email;
+  loadAll(email);
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  var searchInput = document.getElementById('ctx-search-input');
+  if (searchInput) {
+    searchInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') searchCustomer();
+    });
+  }
+});
+
+// ── UI Helpers ──────────────────────────────────────────────
+function showLoading(show) {
+  document.getElementById('loading-bar').className = 'loading-bar' + (show ? ' active' : '');
+}
+
+function showPlaceholder(containerId, html) {
+  document.getElementById(containerId).innerHTML = '<div class="ctx-placeholder">' + html + '</div>';
+}
+
+function escapeHtml(text) {
+  var div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+function switchTab(tabId, btn) {
+  document.querySelectorAll('.ci-tab').forEach(function(t) { t.classList.remove('active'); });
+  document.querySelectorAll('.ci-tab-content').forEach(function(t) { t.classList.remove('active'); });
+  btn.classList.add('active');
+  document.getElementById('tab-' + tabId).classList.add('active');
+}
+
+function fmtDate(v) {
+  if (!v || v === 'null') return '—';
+  try { var d = new Date(v); return isNaN(d) ? v : d.toLocaleDateString('en-US', {month:'short',day:'numeric',year:'numeric'}); }
+  catch(e) { return v; }
+}
+
+function fmtDateTime(v) {
+  if (!v || v === 'null') return '—';
+  try {
+    var d = new Date(v);
+    if (isNaN(d)) return v;
+    return d.toLocaleDateString('en-US', {month:'short',day:'numeric'}) +
+      ' ' + d.toLocaleTimeString('en-US', {hour:'numeric',minute:'2-digit',hour12:true});
+  } catch(e) { return v; }
+}
+
+function statusBadge(v) {
+  if (!v || v === 'null') return '<span class="badge badge-gray">—</span>';
+  var u = String(v).toUpperCase().replace(/[_\-\s]/g, '');
+  var cls = 'badge-gray';
+  if (['ACTIVE','COMPLETED','DONE','ACTIVATED','SUCCESS','RELEASED'].indexOf(u) !== -1) cls = 'badge-green';
+  else if (['INPROGRESS','PENDING','DRAFT','INSTALLED','PROCESSING','WAITING','SUBMITTED'].indexOf(u) !== -1) cls = 'badge-amber';
+  else if (['SUSPENDED','FAILED','CANCELLED','ERROR','REJECTED','TERMINATED'].indexOf(u) !== -1) cls = 'badge-red';
+  return '<span class="badge ' + cls + '">' + escapeHtml(v) + '</span>';
+}
+
+function ctxRow(label, value, mono) {
+  return '<div class="ctx-row"><span class="lbl">' + escapeHtml(label) + '</span><span class="val' + (mono ? ' mono' : '') + '">' + (value || '—') + '</span></div>';
+}
+
+function markdownToHtml(text) {
+  return text
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\n- /g, '\n&bull; ')
+    .replace(/\n\d+\. /g, function(m) { return '\n' + m.trim() + ' '; })
+    .replace(/\n/g, '<br>');
+}
+
+// ── v3: LOB Functions ─────────────────────────────────────────
+
+async function loadLobRegistry() {
+  try {
+    var resp = await zaraFetch(serverUrl + '/api/lob/registry');
+    var data = await resp.json();
+    lobRegistry = data.lobs || [];
+    // Populate LOB picker dropdown
+    var select = document.getElementById('lob-select');
+    if (select) {
+      select.innerHTML = '<option value="">-- Select LOB --</option>';
+      for (var i = 0; i < lobRegistry.length; i++) {
+        var lob = lobRegistry[i];
+        select.innerHTML += '<option value="' + lob.lobId + '">' + lob.icon + ' ' + lob.displayName + '</option>';
+      }
+    }
+  } catch (e) { console.warn('LOB registry load failed:', e); }
+}
+
+function setLob(lobId) {
+  if (!lobId) { currentLob = null; return; }
+  var lob = lobRegistry.find(function(l) { return l.lobId === lobId; });
+  if (lob) {
+    currentLob = lob;
+    showLobBadge(lob);
+    document.getElementById('lob-picker').style.display = 'none';
+    updateAIGreeting();
+    // Reload with LOB context
+    if (requesterEmail) loadAll(requesterEmail);
+  }
+}
+
+function showLobBadge(lob) {
+  var banner = document.getElementById('lob-banner');
+  if (!banner) return;
+  banner.style.display = 'flex';
+  document.getElementById('lob-icon').textContent = lob.icon || '';
+  document.getElementById('lob-name').textContent = (lob.displayName || '').toUpperCase();
+  // Apply LOB color as CSS variables for theming
+  document.documentElement.style.setProperty('--lob-color', lob.color || '#1F73B7');
+  // Compute light bg from color
+  var lobBg = lob.color ? hexToLobBg(lob.color) : '#EDF7FF';
+  document.documentElement.style.setProperty('--lob-bg', lobBg);
+}
+
+function hexToLobBg(hex) {
+  // Convert hex to rgba with low opacity for light background
+  var r = parseInt(hex.slice(1,3), 16);
+  var g = parseInt(hex.slice(3,5), 16);
+  var b = parseInt(hex.slice(5,7), 16);
+  return 'rgba(' + r + ',' + g + ',' + b + ',0.08)';
+}
+
+function showLobPicker() {
+  document.getElementById('lob-banner').style.display = 'none';
+  document.getElementById('lob-picker').style.display = 'block';
+}
+
+function updateLobFromResponse(data) {
+  // data.lob comes from agent-brief or lookup response
+  var lob = data.lob || (data.lobConfig ? { lobId: data.lobConfig.lobId, displayName: data.lobConfig.displayName, shortName: data.lobConfig.shortName, color: data.lobConfig.color, icon: data.lobConfig.icon } : null);
+  if (lob && lob.lobId) {
+    currentLob = lob;
+    showLobBadge(lob);
+    document.getElementById('lob-picker').style.display = 'none';
+    // Update ticket tag in LOB banner
+    var tagEl = document.getElementById('lob-tag');
+    if (tagEl && data.ticketId) {
+      tagEl.textContent = 'Ticket #' + data.ticketId;
+    }
+  } else if (!currentLob) {
+    // LOB not detected — show picker
+    showLobPicker();
+  }
+}
+
+// ── Load All (parallel calls) ────────────────────────────────
+async function loadAll(email) {
+  showLoading(true);
+  showPlaceholder('agent-brief-data', 'Loading agent brief...');
+  showPlaceholder('ctx-data', 'Querying Databricks + Boss API...');
+  showPlaceholder('sla-data', 'Loading SLA data...');
+
+  var btn = document.getElementById('ctx-search-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Looking up...'; }
+
+  // Load SLA in parallel (non-blocking)
+  loadSla(email);
+
+  try {
+    // v3: include lobId if manually selected
+    var briefBody = { email: email };
+    if (currentLob) briefBody.lobId = currentLob.lobId;
+
+    dbg('Fetching lookup + brief for ' + email);
+    var [lookupResp, briefResp] = await Promise.all([
+      zaraFetch(serverUrl + '/api/customer/lookup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email }),
+      }),
+      zaraFetch(serverUrl + '/api/customer/agent-brief', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(briefBody),
+      }),
+    ]);
+    dbg('Responses received');
+
+    lookupData = await lookupResp.json();
+    briefData = await briefResp.json();
+
+    // v3: Update LOB from response
+    if (briefData.found) updateLobFromResponse(briefData);
+    else if (lookupData.found && lookupData.lob) updateLobFromResponse(lookupData);
+
+    // Update AI greeting with LOB context
+    updateAIGreeting();
+
+    // Render Context tab
+    var dataDiv = document.getElementById('ctx-data');
+    if (lookupData.error) {
+      dataDiv.innerHTML = '<div class="ctx-placeholder">Error: ' + escapeHtml(String(lookupData.error)) + '</div>';
+    } else if (!lookupData.found) {
+      dataDiv.innerHTML = '<div class="ctx-placeholder">No customer found for this email.</div>';
+    } else {
+      renderCustomerContext(lookupData, dataDiv);
+    }
+
+    // Render Agent Brief tab
+    var briefDiv = document.getElementById('agent-brief-data');
+    if (briefData.error) {
+      briefDiv.innerHTML = '<div class="ctx-placeholder">Error: ' + escapeHtml(String(briefData.error)) + '</div>';
+    } else if (!briefData.found) {
+      briefDiv.innerHTML = '<div class="ctx-placeholder">No customer found for this email.</div>';
+    } else {
+      renderAgentBrief(briefData, briefDiv);
+    }
+  } catch (err) {
+    dbg('LOAD ERROR: ' + (err.message || String(err)));
+    showPlaceholder('ctx-data', 'Failed to connect to ' + escapeHtml(serverUrl) + '. Error: ' + escapeHtml(err.message || String(err)));
+    showPlaceholder('agent-brief-data', 'Failed to connect to ' + escapeHtml(serverUrl) + '. Error: ' + escapeHtml(err.message || String(err)));
+  } finally {
+    showLoading(false);
+    if (btn) { btn.disabled = false; btn.textContent = 'Look Up'; }
+  }
+}
+
+function refreshAll() {
+  if (requesterEmail) loadAll(requesterEmail);
+}
+
+// ── Extract from Boss API ────────────────────────────────────
+function extractFromBossApi(data) {
+  var ind = data.individual;
+  var sim = data.simProducts;
+  var info = { msisdn: null, imei: null, deviceInfo: null, iccid: null, imsi: null, simStatus: null, numberStatus: null, hasActiveProducts: false };
+
+  if (ind && ind.customers && ind.customers.length > 0 && ind.customers[0].status) {
+    info.numberStatus = ind.customers[0].status;
+  }
+
+  if (ind && ind.products) {
+    for (var i = 0; i < ind.products.length; i++) {
+      var prod = ind.products[i];
+      var ps = (prod.status || '').toLowerCase();
+      if (ps === 'active' || ps === 'pendingactive') info.hasActiveProducts = true;
+      if (prod.realizingResource) {
+        for (var j = 0; j < prod.realizingResource.length; j++) {
+          var r = prod.realizingResource[j];
+          if (r.type === 'MSISDN' && r.value) info.msisdn = r.value;
+          if (r.type === 'ICCID' && r.value) info.iccid = r.value;
+          if (r.type === 'IMSI' && r.value) info.imsi = r.value;
+        }
+      }
+      if (prod.productCharacteristic) {
+        for (var j = 0; j < prod.productCharacteristic.length; j++) {
+          var ch = prod.productCharacteristic[j];
+          if (ch.name && ch.name.toUpperCase().indexOf('IMEI') !== -1 && ch.value) {
+            info.imei = ch.value;
+          }
+          if (ch.name && ch.name.toUpperCase().indexOf('DEVICE') !== -1 && ch.value) {
+            info.deviceInfo = ch.value;
+          }
+        }
+      }
+    }
+  }
+
+  if (sim && sim.active && sim.active.length > 0) {
+    info.simStatus = sim.active[0].status;
+    for (var i = 0; i < sim.active.length; i++) {
+      if (sim.active[i].realizingResource) {
+        for (var j = 0; j < sim.active[i].realizingResource.length; j++) {
+          var r = sim.active[i].realizingResource[j];
+          if (r.type === 'ICCID' && r.value && !info.iccid) info.iccid = r.value;
+          if (r.type === 'IMSI' && r.value && !info.imsi) info.imsi = r.value;
+        }
+      }
+    }
+  }
+
+  if (!info.msisdn && data.msisdn) info.msisdn = data.msisdn;
+  return info;
+}
+
+// ── Funnel Renderer ──────────────────────────────────────────
+function renderFunnel(data) {
+  var order = data.orders && data.orders[0];
+  var boss = extractFromBossApi(data);
+  var paymentDone = !!(order && order.paymentCompleted) || boss.hasActiveProducts;
+  var esimProfile = data.esimProfile;
+  var esimStatus = esimProfile ? String(esimProfile.status || '').toUpperCase() : '';
+  var airvet = data.airvet;
+
+  // v3: Use LOB-specific funnel steps if available from briefData
+  var lobSteps = null;
+  if (briefData && briefData.lobConfig && briefData.lobConfig.funnelSteps) {
+    lobSteps = briefData.lobConfig.funnelSteps;
+  } else if (currentLob && currentLob.funnelSteps) {
+    lobSteps = currentLob.funnelSteps;
+  }
+
+  var stages;
+  if (lobSteps) {
+    // Dynamic funnel from LOB registry
+    stages = lobSteps.map(function(step) {
+      var cls = 'pending';
+      // Compute status based on field mapping
+      if (step.field && order && order[step.field]) cls = 'completed';
+      else if (step.id === 'signup' || step.id === 'account') cls = order ? 'completed' : 'pending';
+      else if (step.id === 'payment') {
+        if (paymentDone) cls = 'completed';
+        else if (order && order.status && order.status.toUpperCase() === 'FAILED') cls = 'error';
+        else if (order) cls = 'current';
+      } else if (step.id === 'number') {
+        if (boss.msisdn) cls = 'completed';
+        else if (paymentDone) cls = 'current';
+      } else if (step.id === 'esim') {
+        if (['INSTALLED', 'ENABLED'].indexOf(esimStatus) !== -1) cls = 'completed';
+        else if (['ERROR', 'FAILED'].indexOf(esimStatus) !== -1) cls = 'error';
+        else if (boss.msisdn && (esimStatus || boss.iccid)) cls = 'current';
+      } else if (step.id === 'airvet') {
+        if (airvet && airvet.activated) cls = 'completed';
+        else if (esimStatus && ['INSTALLED', 'ENABLED'].indexOf(esimStatus) !== -1) cls = 'current';
+      } else if (step.id === 'activation' || step.id === 'active') {
+        if (order && order.onboardingCompleted) cls = 'completed';
+        else if (order && order.activationCompleted) cls = 'completed';
+      }
+      // For LOB-specific steps with field mapping, check order data
+      if (step.field && step.field !== 'paymentCompleted' && step.field !== 'activationCompleted' && step.field !== 'onboardingCompleted') {
+        if (order && order[step.field]) cls = 'completed';
+      }
+      return { name: step.label, cls: cls };
+    });
+  } else {
+    // Default Meow Mobile funnel (backward compatible)
+    var accountCls = order ? 'completed' : 'pending';
+    var paymentCls = 'pending';
+    if (paymentDone) paymentCls = 'completed';
+    else if (order && order.status && order.status.toUpperCase() === 'FAILED') paymentCls = 'error';
+    else if (order) paymentCls = 'current';
+    var numberCls = 'pending';
+    if (boss.msisdn) numberCls = 'completed';
+    else if (paymentDone) numberCls = 'current';
+    var esimCls = 'pending';
+    if (['INSTALLED', 'ENABLED'].indexOf(esimStatus) !== -1) esimCls = 'completed';
+    else if (['ERROR', 'FAILED'].indexOf(esimStatus) !== -1) esimCls = 'error';
+    else if (numberCls === 'completed' && (esimStatus || boss.iccid)) esimCls = 'current';
+    var airvetCls = 'pending';
+    if (airvet && airvet.activated) airvetCls = 'completed';
+    else if (esimCls === 'completed') airvetCls = 'current';
+
+    stages = [
+      { name: 'Account', cls: accountCls },
+      { name: 'Payment', cls: paymentCls },
+      { name: 'Number', cls: numberCls },
+      { name: 'eSIM', cls: esimCls },
+      { name: 'Airvet', cls: airvetCls },
+    ];
+  }
+
+  // Churn detection — suspended or terminated individual
+  var indStatus = '';
+  if (data.individual) {
+    indStatus = String(data.individual.status || '').toUpperCase();
+    if (!indStatus && data.individual.customers && data.individual.customers[0]) {
+      indStatus = String(data.individual.customers[0].status || '').toUpperCase();
+    }
+  }
+  if (indStatus === 'SUSPENDED' || indStatus === 'TERMINATED') {
+    stages.push({ name: 'Churn', cls: 'error' });
+  }
+
+  // Find stalled step label
+  var stalledLabel = '';
+  for (var i = 0; i < stages.length; i++) {
+    if (stages[i].cls === 'current') { stalledLabel = stages[i].name + ' in progress'; break; }
+    if (stages[i].cls === 'error' && stages[i].name !== 'Churn') { stalledLabel = stages[i].name + ' failed'; break; }
+  }
+  if (indStatus === 'SUSPENDED') stalledLabel = 'Account suspended';
+  else if (indStatus === 'TERMINATED') stalledLabel = 'Account terminated';
+  if (!stalledLabel && stages.length > 0 && stages[stages.length - 1].cls === 'completed') stalledLabel = 'All steps complete';
+
+  var html = '<div class="funnel">';
+  for (var i = 0; i < stages.length; i++) {
+    html += '<div class="funnel-step ' + stages[i].cls + '">' + stages[i].name + '</div>';
+  }
+  html += '</div>';
+  if (stalledLabel) html += '<div class="funnel-label">' + escapeHtml(stalledLabel) + '</div>';
+  return html;
+}
+
+// ══════════════════════════════════════════════════════════════
+// TAB 2: CONTEXT — restructured to lead with what matters
+// ══════════════════════════════════════════════════════════════
+function renderCustomerContext(data, container) {
+  var c = data.customer;
+  var order = data.orders && data.orders[0];
+  var boss = extractFromBossApi(data);
+  var msisdn = boss.msisdn || c.phone;
+  var isPortIn = data.orders && data.orders.some(function(o) {
+    return o.selectNumberType === 'PORTIN' || (o.portinResponse && o.portinResponse.indexOf('PortInMSISDN') !== -1);
+  });
+
+  var html = '';
+
+  // 1. Mochi Summary (info collected from user)
+  if (data.mochi && data.mochi.length > 0) {
+    var m = data.mochi[0];
+    html += '<div class="ctx-section"><h4>MOCHI — COLLECTED INFO</h4>';
+    html += ctxRow('Issue Reported', escapeHtml(m.title || '—'));
+    if (m.lastMessagePreview) {
+      html += ctxRow('Last Message', escapeHtml(m.lastMessagePreview));
+    }
+    if (m.deviceInfo) {
+      html += ctxRow('Device Info', escapeHtml(m.deviceInfo));
+    }
+    if (m.errorMessage) {
+      html += ctxRow('Error Message', escapeHtml(m.errorMessage));
+    }
+    html += '</div>';
+  }
+
+  // 3. Funnel Stage (prominent)
+  html += '<div class="ctx-section"><h4>ACCOUNT STAGE</h4>';
+  html += renderFunnel(data);
+  html += '</div>';
+
+  // 4. Customer (compact card)
+  html += '<div class="customer-card">';
+  var cohortVal = c.cohort || 'Regular';
+  var cohortBadge;
+  if (cohortVal === 'S100') cohortBadge = '<span class="badge badge-blue">S100</span>';
+  else if (cohortVal === 'FDT') cohortBadge = '<span class="badge badge-amber">FDT</span>';
+  else cohortBadge = '<span class="badge badge-gray">Regular</span>';
+  html += '<div class="cc-name">' + escapeHtml(c.name || '—') + ' ' + cohortBadge + '</div>';
+  html += '<div class="cc-row"><span>' + escapeHtml(c.email || '—') + '</span></div>';
+  html += '<div class="cc-row"><span>' + escapeHtml(c.phone || '—') + '</span><span>Since ' + fmtDate(order ? order.createdAt : null) + '</span></div>';
+  html += '</div>';
+
+  // 5. Line & SIM
+  html += '<div class="ctx-section"><h4>LINE & SIM</h4>';
+  html += ctxRow('Mobile #', msisdn ? escapeHtml(msisdn) : '—');
+  html += ctxRow('# Status', boss.numberStatus ? statusBadge(boss.numberStatus) : '<span class="badge badge-gray">—</span>');
+  if (isPortIn) {
+    var portVal;
+    if (data.portStatus) {
+      portVal = statusBadge(data.portStatus.status || data.portStatus.portStatus || 'See raw data');
+    } else {
+      portVal = '<span class="badge badge-gray">N/A</span>';
+    }
+    html += ctxRow('Port-in', portVal);
+  }
+  var esimProfileStatus = data.esimProfile ? data.esimProfile.status : null;
+  html += ctxRow('eSIM Status', esimProfileStatus ? statusBadge(esimProfileStatus) : (boss.simStatus ? statusBadge(boss.simStatus) : '<span class="badge badge-gray">—</span>'));
+  html += ctxRow('Device', boss.deviceInfo ? escapeHtml(boss.deviceInfo) : (boss.imei ? escapeHtml(boss.imei) : '—'));
+  if (boss.iccid) {
+    html += ctxRow('ICCID', escapeHtml(boss.iccid), true);
+  }
+  html += '</div>';
+
+  // 6. Order (collapsible, collapsed if completed)
+  if (order) {
+    var orderDone = order.status && ['completed','done'].indexOf(order.status.toLowerCase()) !== -1;
+    html += '<div class="ctx-section"><details' + (orderDone ? '' : ' open') + '>';
+    html += '<summary class="section-heading">ORDER ' + statusBadge(order.status) + '</summary>';
+    html += '<div style="margin-top:8px;">';
+    html += ctxRow('Order ID', '<span class="mono">' + escapeHtml(order.orderId || '—') + '</span>');
+    var paid = order.paymentCompleted || boss.hasActiveProducts;
+    html += ctxRow('Payment', paid ? statusBadge('Done') : statusBadge('Pending'));
+    html += ctxRow('Created', fmtDate(order.createdAt));
+    if (data.orders.length > 1) {
+      html += ctxRow('Total Orders', '<span class="badge badge-blue">' + data.orders.length + '</span>');
+    }
+    html += '</div></details></div>';
+  }
+
+  // 6b. Issue Info — triage intake fields (L1+ only, not for L0 customer-facing agents)
+  if (briefData && briefData.draftType !== 'customer' && briefData.incidentIntake && briefData.incidentIntake.fields) {
+    var intake = briefData.incidentIntake;
+    var ALREADY_DISPLAYED = {
+      'ICCID': true, 'New SIM ICCID': true, 'Active SIM ICCID': true,
+      'IMEI': true, 'MSISDN': true, 'SIM Type': true, 'Device Make/Model': true
+    };
+    var filteredFields = [];
+    for (var fi = 0; fi < intake.fields.length; fi++) {
+      if (!ALREADY_DISPLAYED[intake.fields[fi].field]) {
+        filteredFields.push(intake.fields[fi]);
+      }
+    }
+    if (filteredFields.length > 0) {
+      var needsInput = [];
+      var autoFilled = [];
+      for (var fi = 0; fi < filteredFields.length; fi++) {
+        if (filteredFields[fi].source === 'api' && filteredFields[fi].value) {
+          autoFilled.push(filteredFields[fi]);
+        } else {
+          needsInput.push(filteredFields[fi]);
+        }
+      }
+      var filledCount = autoFilled.length;
+      var totalFields = filteredFields.length;
+      var pct = Math.round((filledCount / totalFields) * 100);
+      var toggleId = 'issue-info-auto-' + Date.now();
+
+      html += '<div class="issue-info-card">';
+      html += '<div class="issue-info-header">';
+      html += '<span class="section-label">ISSUE INFO — ' + escapeHtml(intake.templateType) + '</span>';
+      html += '<div class="ts-progress">';
+      html += '<div class="ts-progress-bar"><div class="ts-progress-fill" style="width:' + pct + '%;"></div></div>';
+      html += '<span class="ts-progress-label">' + filledCount + '/' + totalFields + '</span>';
+      html += '</div></div>';
+
+      // Needs-input fields (prominent)
+      for (var ni = 0; ni < needsInput.length; ni++) {
+        var f = needsInput[ni];
+        html += '<div class="issue-info-item needs-input">';
+        html += '<div class="issue-info-icon">!</div>';
+        html += '<div class="issue-info-body">';
+        html += '<div class="issue-info-label">' + escapeHtml(f.field) + '</div>';
+        html += '<div class="issue-info-val">Needs agent input</div>';
+        html += '</div></div>';
+      }
+
+      // Auto-filled fields (collapsed)
+      if (autoFilled.length > 0) {
+        html += '<details class="issue-info-toggle"><summary>\u25B8 Auto-filled (' + autoFilled.length + ')</summary>';
+        for (var ai = 0; ai < autoFilled.length; ai++) {
+          var af = autoFilled[ai];
+          html += '<div class="issue-info-item auto-filled">';
+          html += '<div class="issue-info-icon">\u2713</div>';
+          html += '<div class="issue-info-body">';
+          html += '<div class="issue-info-label">' + escapeHtml(af.field) + '</div>';
+          html += '<div class="issue-info-val">' + escapeHtml(String(af.value)) + '</div>';
+          html += '</div></div>';
+        }
+        html += '</details>';
+      }
+
+      html += '</div>';
+    }
+  }
+
+  // 7. Journey Friction — repeated CJ action events indicating retries/failures
+  var retries = data.journeyRetries || [];
+  // Filter out passive view/status events — only keep actual actions
+  var viewPattern = /(_view$|_viewed$|_screen$|_page$|_opened$|_started$|_loaded$|_displayed$|_status$|_check$|^tutorial|^af_mochi$|^mochi$)/i;
+  var actionRetries = [];
+  for (var ri = 0; ri < retries.length; ri++) {
+    var evName = retries[ri].event || '';
+    if (!viewPattern.test(evName)) actionRetries.push(retries[ri]);
+  }
+  if (actionRetries.length > 0) {
+    // Categorize events into meaningful groups
+    var frictionCategories = {
+      Payment: { pattern: /payment|pay|charge|checkout|stripe|billing/i, items: [], icon: '\uD83D\uDCB3' },
+      'Port-in': { pattern: /port|number_transfer|ntp|porting/i, items: [], icon: '\uD83D\uDD04' },
+      'eSIM Activation': { pattern: /esim|e_sim|activation|provision|qr|download_profile/i, items: [], icon: '\uD83D\uDCF1' },
+      'Airvet / Pet Insurance': { pattern: /airvet|pet|vet|insurance/i, items: [], icon: '\uD83D\uDC3E' },
+      'Plan Selection': { pattern: /plan|select_plan|pricing|subscription/i, items: [], icon: '\uD83D\uDCCB' },
+      'Number Selection': { pattern: /number_selection|select_number|choose_number|msisdn/i, items: [], icon: '#\uFE0F\u20E3' },
+      'IMEI / Device': { pattern: /imei|device|compatibility|check_device/i, items: [], icon: '\uD83D\uDD0D' },
+      'Login / Auth': { pattern: /login|auth|sign_in|otp|verify_email|register/i, items: [], icon: '\uD83D\uDD10' },
+      Other: { pattern: null, items: [], icon: '\u26A0' }
+    };
+
+    for (var ri = 0; ri < actionRetries.length; ri++) {
+      var ev = actionRetries[ri];
+      var evName = ev.event || '';
+      var matched = false;
+      for (var cat in frictionCategories) {
+        if (cat === 'Other') continue;
+        if (frictionCategories[cat].pattern && frictionCategories[cat].pattern.test(evName)) {
+          frictionCategories[cat].items.push(ev);
+          matched = true;
+          break;
+        }
+      }
+      if (!matched) frictionCategories['Other'].items.push(ev);
+    }
+
+    html += '<div class="ctx-section"><h4>JOURNEY FRICTION</h4>';
+    html += '<div style="font-size:12px;line-height:1.6;">';
+    for (var cat in frictionCategories) {
+      var fc = frictionCategories[cat];
+      if (fc.items.length === 0) continue;
+      // Sum total attempts for this category
+      var totalAttempts = 0;
+      var eventNames = [];
+      for (var fi = 0; fi < fc.items.length; fi++) {
+        totalAttempts += parseInt(fc.items[fi].attempts) || 0;
+        var rawName = (fc.items[fi].event || '').replace(/^af_/, '').replace(/_/g, ' ');
+        eventNames.push(rawName + ' (' + fc.items[fi].attempts + 'x)');
+      }
+      var sevClass = totalAttempts >= 5 ? 'sev-high' : totalAttempts >= 3 ? 'sev-med' : 'sev-low';
+      html += '<div class="friction-row">';
+      html += '<div class="friction-header">';
+      html += '<span style="font-size:13px;">' + fc.icon + '</span>';
+      html += '<span class="friction-category">' + escapeHtml(cat) + '</span>';
+      html += '<span class="' + sevClass + '">' + totalAttempts + ' attempts</span>';
+      html += '</div>';
+      html += '<div class="friction-detail">' + escapeHtml(eventNames.join(', ')) + '</div>';
+      html += '</div>';
+    }
+    html += '</div></div>';
+  }
+
+  // 8. Comms Timeline — deduplicated, from correspondenceSummaries + Braze
+  var commsEntries = [];
+  var corr = (briefData && briefData.correspondenceSummaries) ? briefData.correspondenceSummaries : [];
+  for (var ci = 0; ci < corr.length; ci++) {
+    var c = corr[ci];
+    var chLabel = c.channel === 'mochi' ? 'Mochi' : c.channel === 'mochi_escalation' ? 'Mochi → Ticket' : 'Ticket';
+    commsEntries.push({
+      date: c.date || c.updatedAt,
+      channel: chLabel,
+      topic: c.summary || 'General inquiry',
+      outcome: c.outcome || c.status || '',
+      messageCount: c.messageCount || null,
+      ticketId: c.ticketId,
+      status: c.status,
+    });
+  }
+  // Braze marketing emails (separate channel, no dedup needed)
+  var brazeList = data.brazeEmails || [];
+  for (var bi = 0; bi < brazeList.length; bi++) {
+    commsEntries.push({
+      date: brazeList[bi].sent_at,
+      channel: 'Marketing',
+      topic: brazeList[bi].campaign_name || 'Email campaign',
+      outcome: 'Sent',
+      messageCount: null,
+      ticketId: null,
+      status: null,
+    });
+  }
+  commsEntries.sort(function(a, b) {
+    var da = a.date ? new Date(a.date).getTime() : 0;
+    var db = b.date ? new Date(b.date).getTime() : 0;
+    return db - da;
+  });
+
+  if (commsEntries.length > 0) {
+    html += '<div class="ctx-section"><h4>COMMS TIMELINE</h4>';
+    var channelColors = { 'Ticket': 'var(--blue)', 'Mochi': 'var(--indigo)', 'Mochi → Ticket': 'var(--indigo)', 'Marketing': 'var(--dark-amber)' };
+    var outcomeColors = {
+      'Resolved': 'var(--green)', 'Resolved by bot': 'var(--green)',
+      'Waiting on customer': 'var(--dark-amber)', 'Escalated to agent': 'var(--dark-amber)',
+      'Open': 'var(--blue)', 'On hold': 'var(--text-meta)', 'Sent': 'var(--text-meta)',
+    };
+    for (var ti = 0; ti < Math.min(commsEntries.length, 10); ti++) {
+      var entry = commsEntries[ti];
+      var dateStr = entry.date ? fmtDate(entry.date) : '—';
+      var chColor = channelColors[entry.channel] || 'var(--text-secondary)';
+      // Determine outcome color — check for prefix match for resolution hints
+      var ocColor = outcomeColors[entry.outcome] || 'var(--text-secondary)';
+      if (entry.status === 'solved' || entry.status === 'closed') ocColor = 'var(--green)';
+      else if (entry.status === 'pending') ocColor = 'var(--dark-amber)';
+
+      html += '<div class="comms-row">';
+      // Row 1: date + channel + topic
+      html += '<div class="comms-header">';
+      html += '<span class="comms-date">' + escapeHtml(dateStr) + '</span>';
+      html += '<span style="font-size:10px;font-weight:600;color:' + chColor + ';min-width:55px;flex-shrink:0;">' + escapeHtml(entry.channel) + '</span>';
+      html += '<span class="comms-topic">' + escapeHtml(entry.topic) + '</span>';
+      html += '</div>';
+      // Row 2: outcome + message count
+      var metaLine = entry.outcome || '';
+      if (entry.messageCount && entry.messageCount > 1) {
+        metaLine += (metaLine ? ' · ' : '') + entry.messageCount + ' msgs';
+      }
+      if (entry.ticketId) {
+        metaLine += (metaLine ? ' · ' : '') + '#' + entry.ticketId;
+      }
+      if (metaLine) {
+        html += '<div style="font-size:11px;color:' + ocColor + ';margin-top:1px;padding-left:133px;" class="comms-meta">' + escapeHtml(metaLine) + '</div>';
+      }
+      html += '</div>';
+    }
+    html += '</div>';
+  }
+
+  container.innerHTML = html;
+}
+
+// ── Diagnostic Checklist Builder ─────────────────────────────
+// Reads lookupData to auto-check verifiable items with real values.
+// Returns array of { label, value, status: 'checked'|'error'|'pending' }
+function buildDiagnosticChecklist() {
+  var checks = [];
+  if (!lookupData) return checks;
+
+  var order = lookupData.orders && lookupData.orders[0];
+  var boss = extractFromBossApi(lookupData);
+  var esim = lookupData.esimProfile;
+  var airvet = lookupData.airvet;
+  var portStatus = lookupData.portStatus;
+  var mochi = lookupData.mochi;
+
+  // 1. Account / Order
+  if (order) {
+    var orderStatus = (order.status || '').toLowerCase();
+    if (['completed', 'done'].indexOf(orderStatus) !== -1) {
+      checks.push({ label: 'Order', value: 'Completed — ' + escapeHtml(order.orderId || ''), status: 'checked' });
+    } else if (orderStatus === 'failed' || orderStatus === 'cancelled') {
+      checks.push({ label: 'Order', value: escapeHtml(order.status) + ' — ' + escapeHtml(order.orderId || ''), status: 'error' });
+    } else if (order.orderId) {
+      checks.push({ label: 'Order', value: escapeHtml(order.status || 'In progress') + ' — ' + escapeHtml(order.orderId), status: 'checked' });
+    }
+  } else {
+    checks.push({ label: 'Order', value: 'No order found', status: 'pending' });
+  }
+
+  // 2. Payment
+  var paymentDone = !!(order && order.paymentCompleted) || boss.hasActiveProducts;
+  if (paymentDone) {
+    checks.push({ label: 'Payment', value: 'Completed', status: 'checked' });
+  } else if (order && order.status && order.status.toUpperCase() === 'FAILED') {
+    checks.push({ label: 'Payment', value: 'Failed', status: 'error' });
+  } else if (order) {
+    checks.push({ label: 'Payment', value: 'Pending', status: 'pending' });
+  }
+
+  // 3. Number assignment
+  if (boss.msisdn) {
+    checks.push({ label: 'Number assigned', value: escapeHtml(boss.msisdn), status: 'checked' });
+  } else {
+    checks.push({ label: 'Number assigned', value: 'Not yet assigned', status: 'pending' });
+  }
+
+  // 4. Port-in (only if applicable)
+  var isPortIn = lookupData.orders && lookupData.orders.some(function(o) {
+    return o.selectNumberType === 'PORTIN' || (o.portinResponse && o.portinResponse.indexOf('PortInMSISDN') !== -1);
+  });
+  if (isPortIn) {
+    if (portStatus) {
+      var ps = (portStatus.status || portStatus.portStatus || '').toUpperCase();
+      if (['COMPLETED', 'DONE', 'RELEASED'].indexOf(ps) !== -1) {
+        checks.push({ label: 'Port-in', value: 'Completed', status: 'checked' });
+      } else if (['FAILED', 'REJECTED', 'CANCELLED'].indexOf(ps) !== -1) {
+        checks.push({ label: 'Port-in', value: escapeHtml(portStatus.status || portStatus.portStatus), status: 'error' });
+      } else {
+        checks.push({ label: 'Port-in', value: escapeHtml(portStatus.status || portStatus.portStatus || 'In progress'), status: 'pending' });
+      }
+    } else {
+      checks.push({ label: 'Port-in', value: 'Status unknown', status: 'pending' });
+    }
+  }
+
+  // 5. eSIM profile
+  if (esim) {
+    var esimStatus = (esim.status || '').toUpperCase();
+    if (['INSTALLED', 'ENABLED'].indexOf(esimStatus) !== -1) {
+      checks.push({ label: 'eSIM profile', value: escapeHtml(esim.status), status: 'checked' });
+    } else if (['ERROR', 'FAILED'].indexOf(esimStatus) !== -1) {
+      checks.push({ label: 'eSIM profile', value: escapeHtml(esim.status), status: 'error' });
+    } else {
+      checks.push({ label: 'eSIM profile', value: escapeHtml(esim.status || 'Provisioning'), status: 'pending' });
+    }
+  } else if (boss.iccid) {
+    checks.push({ label: 'eSIM profile', value: 'ICCID assigned — awaiting install', status: 'pending' });
+  } else {
+    checks.push({ label: 'eSIM profile', value: 'Not provisioned', status: 'pending' });
+  }
+
+  // 6. IMEI (device)
+  if (boss.imei) {
+    checks.push({ label: 'Device IMEI', value: '<span class="mono">' + escapeHtml(boss.imei) + '</span>', status: 'checked' });
+  } else {
+    checks.push({ label: 'Device IMEI', value: 'Not on file — ask customer', status: 'pending' });
+  }
+
+  // 7. ICCID
+  if (boss.iccid) {
+    checks.push({ label: 'ICCID', value: '<span class="mono">' + escapeHtml(boss.iccid) + '</span>', status: 'checked' });
+  }
+
+  // 8. Airvet activation
+  if (airvet && airvet.activated) {
+    checks.push({ label: 'Airvet', value: 'Activated' + (airvet.activatedAt ? ' — ' + fmtDate(airvet.activatedAt) : ''), status: 'checked' });
+  } else {
+    checks.push({ label: 'Airvet', value: 'Not activated', status: 'pending' });
+  }
+
+  // 9. Mochi bot interaction
+  if (mochi && mochi.length > 0) {
+    var m = mochi[0];
+    var mLabel = escapeHtml(m.category || m.title || 'Support');
+    var mEsc = m.escalated === 'true' ? ' (escalated)' : '';
+    checks.push({ label: 'Mochi chat', value: mLabel + mEsc + ' — ' + fmtDate(m.created_at), status: 'checked' });
+  }
+
+  return checks;
+}
+
+// Renders diagnostic checklist HTML from a checks array
+function renderDiagnosticChecklistHtml(checks) {
+  if (!checks || checks.length === 0) return '';
+
+  var doneCount = 0;
+  for (var i = 0; i < checks.length; i++) {
+    if (checks[i].status === 'checked') doneCount++;
+  }
+  var total = checks.length;
+  var pct = Math.round((doneCount / total) * 100);
+
+  var html = '<div class="ts-card">';
+  html += '<div class="ts-header">';
+  html += '<span class="section-label">System Checks</span>';
+  html += '<div class="ts-progress">';
+  html += '<div class="ts-progress-bar"><div class="ts-progress-fill" style="width:' + pct + '%;"></div></div>';
+  html += '<span class="ts-progress-label">' + doneCount + '/' + total + '</span>';
+  html += '</div></div>';
+
+  for (var i = 0; i < checks.length; i++) {
+    var c = checks[i];
+    var cls = c.status === 'checked' ? 'checked' : (c.status === 'error' ? 'error' : 'pending');
+    var checkIcon = c.status === 'checked' ? '\u2713' : (c.status === 'error' ? '\u2717' : '');
+    html += '<div class="diag-item ' + cls + '">';
+    html += '<div class="diag-check">' + checkIcon + '</div>';
+    html += '<div class="diag-body">';
+    html += '<div class="diag-label">' + escapeHtml(c.label) + '</div>';
+    html += '<div class="diag-value">' + c.value + '</div>';
+    html += '</div></div>';
+  }
+
+  html += '</div>';
+  return html;
+}
+
+// ══════════════════════════════════════════════════════════════
+// TAB 1: AGENT BRIEF — redesigned triage layout
+// Who → What's wrong → How bad → What to do → What to say
+// ══════════════════════════════════════════════════════════════
+function renderAgentBrief(data, container) {
+  var html = '';
+  var draftId = 'email-draft-' + Date.now();
+  var urgencyId = 'urgency-' + Date.now();
+
+  // Pull customer info from lookupData (global) if available
+  var customerName = '—';
+  var orderStatus = null;
+  if (lookupData && lookupData.customer) {
+    customerName = lookupData.customer.name || '—';
+  }
+  if (lookupData && lookupData.orders && lookupData.orders.length > 0) {
+    orderStatus = lookupData.orders[0].status;
+  }
+
+  // ─── 1. HERO CARD (who + what's wrong + confidence) ──────
+  var confidence = (data.currentProblem && data.currentProblem.confidence) || 'low';
+  html += '<div class="hero-card confidence-' + confidence + '">';
+  html += '<div class="hc-top">';
+  html += '<span class="hc-name">' + escapeHtml(customerName);
+  // LOB badge inline
+  if (currentLob) {
+    html += ' <span class="hc-lob-badge">' + (currentLob.icon || '') + ' ' + escapeHtml(currentLob.shortName || currentLob.displayName || '') + '</span>';
+  }
+  html += '</span>';
+  // Cohort badge
+  var cohortLabel = '';
+  if (lookupData && lookupData.customer) cohortLabel = lookupData.customer.cohort || '';
+  if (cohortLabel) {
+    var cohortCls = cohortLabel === 'S100' ? 'badge-purple' : cohortLabel === 'FDT' ? 'badge-amber' : 'badge-gray';
+    html += '<span class="badge ' + cohortCls + '">' + escapeHtml(cohortLabel) + '</span>';
+  } else if (orderStatus) {
+    html += statusBadge(orderStatus);
+  }
+  html += '</div>';
+  if (data.currentProblem) {
+    html += '<div class="hc-problem">' + escapeHtml(data.currentProblem.problem) + '</div>';
+    html += '<div class="hc-meta">';
+    html += '<span class="hc-confidence"><span class="hc-dot"></span> ' + confidence.charAt(0).toUpperCase() + confidence.slice(1) + ' confidence</span>';
+    html += '<span class="hc-source">AI</span>';
+    html += '</div>';
+  } else {
+    html += '<div class="hc-no-problem">No issue detected — review conversation</div>';
+  }
+  html += '</div>';
+
+  // ─── 2. URGENCY STRIP (how bad — contact history) ────────
+  html += buildUrgencyStrip(data.previousContacts, urgencyId);
+
+  // ─── 3. NEXT STEPS ──────────────────────────────────────
+  if (data.nextSteps && data.nextSteps.length > 0) {
+    var primaryStep = null;
+    var doneSteps = [];
+    var remainingSteps = [];
+
+    for (var i = 0; i < data.nextSteps.length; i++) {
+      var step = data.nextSteps[i];
+      if (step.type === 'ai_done') {
+        doneSteps.push(step);
+      } else if (!primaryStep) {
+        primaryStep = step;
+      } else {
+        remainingSteps.push(step);
+      }
+    }
+
+    // Primary action card OR "all done" card
+    if (primaryStep) {
+      var iconChar = getStepIcon(primaryStep.type);
+      html += '<div class="action-card">';
+      html += '<div class="ac-header">';
+      html += '<div class="ac-icon type-' + escapeHtml(primaryStep.type) + '">' + iconChar + '</div>';
+      html += '<div class="ac-text">';
+      if (primaryStep.url) {
+        html += '<a href="' + escapeHtml(primaryStep.url) + '" target="_blank" class="link-inherit">' + escapeHtml(primaryStep.text) + '</a>';
+      } else {
+        html += escapeHtml(primaryStep.text);
+      }
+      html += '</div>';
+      html += '</div>';
+      if (primaryStep.result) {
+        html += '<div class="ac-result">' + escapeHtml(primaryStep.result) + '</div>';
+      }
+      if (primaryStep.source) {
+        html += '<div class="step-source">Source: ' + escapeHtml(primaryStep.source) + '</div>';
+      }
+      html += '</div>';
+    } else if (doneSteps.length > 0) {
+      html += '<div class="action-card action-done">';
+      html += '<div class="ac-header">';
+      html += '<div class="ac-icon type-ai_done">\u2713</div>';
+      html += '<div class="ac-text">No further action needed</div>';
+      html += '</div>';
+      html += '<div class="ac-result">' + doneSteps.length + ' step' + (doneSteps.length > 1 ? 's' : '') + ' completed by Zara</div>';
+      html += '</div>';
+    }
+
+    // Remaining steps (collapsed by default)
+    if (remainingSteps.length > 0) {
+      var remId = 'rem-' + Date.now();
+      html += '<button class="completed-toggle" onclick="toggleCompletedSteps(\'' + remId + '\', this)">' + remainingSteps.length + ' more step' + (remainingSteps.length > 1 ? 's' : '') + '</button>';
+      html += '<div class="completed-steps" id="' + remId + '">';
+      for (var i = 0; i < remainingSteps.length; i++) {
+        var rs = remainingSteps[i];
+        var rsIcon = getStepIcon(rs.type);
+        html += '<div class="rs-item">';
+        html += '<div class="rs-icon type-' + escapeHtml(rs.type) + '">' + rsIcon + '</div>';
+        html += '<div class="rs-text">';
+        if (rs.url) {
+          html += '<a href="' + escapeHtml(rs.url) + '" target="_blank">' + escapeHtml(rs.text) + '</a>';
+        } else {
+          html += escapeHtml(rs.text);
+        }
+        if (rs.source) {
+          html += '<div class="step-source">Source: ' + escapeHtml(rs.source) + '</div>';
+        }
+        html += '</div></div>';
+      }
+      html += '</div>';
+    }
+
+    // Done steps (collapsed)
+    if (doneSteps.length > 0) {
+      var doneId = 'done-' + Date.now();
+      html += '<button class="completed-toggle" onclick="toggleCompletedSteps(\'' + doneId + '\', this)">' + doneSteps.length + ' completed</button>';
+      html += '<div class="completed-steps" id="' + doneId + '">';
+      for (var i = 0; i < doneSteps.length; i++) {
+        var ds = doneSteps[i];
+        html += '<div class="rs-item">';
+        html += '<div class="rs-icon type-ai_done">✓</div>';
+        html += '<div class="rs-text rs-done">' + escapeHtml(ds.text);
+        if (ds.result) html += '<div class="step-result">' + escapeHtml(ds.result) + '</div>';
+        if (ds.source) html += '<div class="step-source">Source: ' + escapeHtml(ds.source) + '</div>';
+        html += '</div></div>';
+      }
+      html += '</div>';
+    }
+  }
+
+  // ─── 3b. DIAGNOSTIC SEQUENCE (system checks visualization) ──
+  var diagChecks = buildDiagnosticChecklist();
+  if (diagChecks && diagChecks.length > 0) {
+    var diagDone = 0;
+    for (var di = 0; di < diagChecks.length; di++) {
+      if (diagChecks[di].status === 'checked') diagDone++;
+    }
+    html += '<div class="diag-sequence">';
+    html += '<div class="diag-header">Diagnostic Sequence <span class="diag-progress">' + diagDone + '/' + diagChecks.length + '</span></div>';
+    for (var di = 0; di < diagChecks.length; di++) {
+      var dc = diagChecks[di];
+      var stepStatus = dc.status === 'checked' ? 'completed' : (dc.status === 'error' ? 'skipped' : 'locked');
+      // First non-completed step is "current"
+      if (dc.status !== 'checked' && dc.status !== 'error') {
+        var hasPriorCurrent = false;
+        for (var dj = 0; dj < di; dj++) {
+          if (diagChecks[dj].status !== 'checked' && diagChecks[dj].status !== 'error') { hasPriorCurrent = true; break; }
+        }
+        if (!hasPriorCurrent) stepStatus = 'current';
+      }
+      var numIcon = stepStatus === 'completed' ? '\u2713' : (di + 1);
+      html += '<div class="diag-step step-' + stepStatus + '">';
+      html += '<div class="diag-num">' + numIcon + '</div>';
+      html += '<div><div class="diag-label">' + escapeHtml(dc.label) + '</div>';
+      html += '<div class="diag-desc">' + dc.value + '</div></div>';
+      html += '</div>';
+    }
+    html += '</div>';
+  }
+
+  // ─── 3c. CTA GRID (agent actions) ─────────────────────────
+  if (data.ctaActions && data.ctaActions.length > 0) {
+    html += '<div class="cta-section">';
+    html += '<div class="cta-section-label">Agent Actions</div>';
+    html += '<div class="cta-grid">';
+    for (var ci = 0; ci < data.ctaActions.length; ci++) {
+      var cta = data.ctaActions[ci];
+      var ctaDone = cta.done || cta.executed;
+      html += '<button class="cta-btn' + (ctaDone ? ' cta-done' : '') + '" ' +
+        (ctaDone ? '' : 'onclick="executeCTA(\'' + escapeHtml(cta.type || cta.id) + '\', this)"') + '>';
+      html += (cta.icon || '\u26A1') + ' ' + escapeHtml(cta.label);
+      if (ctaDone) html += '<span class="cta-status">\u2713</span>';
+      html += '</button>';
+    }
+    html += '</div>';
+    // Render result cards for completed CTAs
+    for (var ci = 0; ci < data.ctaActions.length; ci++) {
+      var cta = data.ctaActions[ci];
+      if ((cta.done || cta.executed) && cta.result) {
+        var r = cta.result;
+        html += '<div class="cta-result"><div class="cr-title">' + escapeHtml(r.title || cta.label) + '</div>';
+        if (r.rows) {
+          for (var ri = 0; ri < r.rows.length; ri++) {
+            var row = r.rows[ri];
+            var valHtml = row[2] ? '<span class="badge ' + row[2] + '">' + escapeHtml(row[1]) + '</span>' : escapeHtml(row[1]);
+            html += '<div class="cr-row"><span class="cr-label">' + escapeHtml(row[0]) + '</span><span class="cr-value">' + valHtml + '</span></div>';
+          }
+        }
+        if (r.alert) {
+          html += '<div class="cr-alert alert-' + (r.alert.type || 'amber') + '">' + escapeHtml(r.alert.text) + '</div>';
+        }
+        html += '</div>';
+      }
+    }
+    html += '</div>';
+  }
+
+  // ─── 4. EMAIL DRAFT (conditional — only if draft exists) ──
+  var draftObj = (data.customerState && data.customerState.suggestedResponse) || null;
+  var draftText = '';
+  var draftBasedOn = [];
+  var draftVerify = [];
+  if (draftObj) {
+    if (typeof draftObj === 'string') {
+      draftText = draftObj;  // backward compat
+    } else {
+      draftText = draftObj.text || '';
+      draftBasedOn = draftObj.basedOn || [];
+      draftVerify = draftObj.verify || [];
+    }
+  }
+  if (!draftText && data.nextSteps) {
+    for (var i = 0; i < data.nextSteps.length; i++) {
+      if (data.nextSteps[i].emailDraft) { draftText = data.nextSteps[i].emailDraft; break; }
+    }
+  }
+  if (draftText) {
+    // Store original draft for feedback comparison
+    window._draftOriginals = window._draftOriginals || {};
+    window._draftOriginals[draftId] = draftText;
+
+    // Status badge logic
+    var hasFlags = draftVerify.length > 0;
+    var hasFacts = draftBasedOn.length > 0;
+    var statusBadgeHtml = '';
+    if (hasFlags) {
+      statusBadgeHtml = '<span class="draft-status-badge status-review">Needs review</span>';
+    } else if (hasFacts) {
+      statusBadgeHtml = '<span class="draft-status-badge status-ready">Ready to send</span>';
+    }
+
+    html += '<div class="draft-card" id="' + draftId + '-card">';
+    html += '<div class="draft-label">Draft Reply' + statusBadgeHtml + '</div>';
+    html += '<div class="draft-preview" id="' + draftId + '-preview" onclick="toggleDraftExpand(\'' + draftId + '\')">' + escapeHtml(draftText) + '</div>';
+    html += '<div class="draft-edit-area" id="' + draftId + '-edit"><textarea id="' + draftId + '-textarea">' + escapeHtml(draftText) + '</textarea></div>';
+
+    // Feedback result area (hidden until send)
+    html += '<div class="draft-feedback" id="' + draftId + '-feedback" style="display:none;"></div>';
+
+    html += '<div class="draft-actions" id="' + draftId + '-actions">';
+    html += '<button class="btn-edit" onclick="reviewDraft2(\'' + draftId + '\')">Edit</button>';
+    html += '<button class="btn-send-reply" onclick="sendDraft2(\'' + draftId + '\')">Send Reply</button>';
+    html += '</div></div>';
+
+    // ── Verification details (outside the draft card) ──
+    if (hasFacts || hasFlags) {
+      html += '<div class="draft-verification">';
+      if (hasFacts) {
+        html += '<div class="draft-facts">';
+        for (var i = 0; i < draftBasedOn.length; i++) {
+          html += '<span class="draft-fact">\u2713 ' + escapeHtml(draftBasedOn[i]) + '</span>';
+        }
+        html += '</div>';
+      }
+      for (var i = 0; i < draftVerify.length; i++) {
+        html += '<div class="draft-flag">\u26A0 ' + escapeHtml(draftVerify[i]) + '</div>';
+      }
+      html += '</div>';
+    }
+
+    // ── 4b. ESCALATION PACKAGE (vendor tickets only) ──
+    if (data.escalationPackage) {
+      var esc = data.escalationPackage;
+      var escId = 'esc-draft-' + Date.now();
+      html += '<div class="escalation-card">';
+      html += '<div class="escalation-label">';
+      html += 'Escalation Package';
+      html += '<span class="escalation-vendor-badge">' + escapeHtml(esc.vendorTeam) + '</span>';
+      html += '</div>';
+
+      if (esc.completeness < 100) {
+        html += '<div class="esc-completeness">';
+        html += '<span>' + esc.completeness + '% fields auto-filled</span>';
+        html += '</div>';
+      }
+
+      if (esc.hasTriageAnalysis) {
+        html += '<div class="esc-triage-badge">AI Triage Analysis</div>';
+      }
+
+      html += '<div class="draft-preview" id="' + escId + '-preview" onclick="toggleDraftExpand(\'' + escId + '\')">';
+      html += escapeHtml(esc.text);
+      html += '</div>';
+      html += '<div class="draft-edit-area" id="' + escId + '-edit">';
+      html += '<textarea id="' + escId + '-textarea">' + escapeHtml(esc.text) + '</textarea>';
+      html += '</div>';
+
+      html += '<div class="draft-actions" id="' + escId + '-actions">';
+      html += '<button class="btn-edit" onclick="reviewDraft2(\'' + escId + '\')">Edit</button>';
+      html += '<button class="btn-copy" onclick="copyDraft(\'' + escId + '\')">Copy</button>';
+      html += '</div>';
+      html += '</div>';
+    }
+  }
+
+  container.innerHTML = html;
+}
+
+// ── Contact Card Helper ──────────────────────────────────────
+function renderContactCard(c) {
+  var chCls = c.channel === 'Mochi' ? 'ch-mochi' : 'ch-email';
+  var html = '<div class="brief-contact">';
+  html += '<div class="bc-header">';
+  html += '<span class="bc-channel ' + chCls + '">' + escapeHtml(c.channel) + '</span>';
+  if (c.status) {
+    html += '<span class="bc-status">' + statusBadge(c.status) + '</span>';
+  }
+  if (c.escalated) {
+    html += '<span class="badge badge-red" style="font-size:10px;">Escalated</span>';
+  }
+  html += '<span class="bc-date">' + fmtDateTime(c.date) + '</span>';
+  html += '</div>';
+  var summary = '';
+  if (c.channel === 'Mochi') {
+    summary = 'Customer chatted about ' + escapeHtml(c.reason || 'a support topic') + '.';
+    if (c.escalated) summary += ' Chat was escalated to a live agent.';
+    else summary += ' Handled by Mochi bot.';
+  } else {
+    summary = 'Customer contacted support re: ' + escapeHtml(c.reason || 'a support issue') + '.';
+    if (c.status === 'solved' || c.status === 'closed') summary += ' Ticket was resolved.';
+    else if (c.status === 'pending') summary += ' Waiting on customer response.';
+    else if (c.status === 'open' || c.status === 'new') summary += ' Still open — needs agent action.';
+    else if (c.status === 'hold') summary += ' On hold — waiting on a third party.';
+  }
+  html += '<div class="bc-summary">' + summary + '</div>';
+  html += '</div>';
+  return html;
+}
+
+function renderContactSummary(c, currentProblem) {
+  var issueText = c.reason || 'Support inquiry';
+  var resolved = c.status === 'solved' || c.status === 'closed';
+  var relevant = currentProblem && c.reason &&
+    currentProblem.toLowerCase().indexOf(c.reason.toLowerCase()) !== -1;
+  var chCls = c.channel === 'Mochi' ? 'ch-mochi' : 'ch-email';
+
+  var html = '<div class="brief-contact">';
+  html += '<div class="bc-summary">' + escapeHtml(issueText) + '</div>';
+  html += '<div class="bc-header">';
+  html += '<span class="bc-channel ' + chCls + '">' + escapeHtml(c.channel) + '</span>';
+  html += statusBadge(resolved ? 'Resolved' : (c.status || 'Open'));
+  if (relevant) {
+    html += '<span class="badge badge-amber" style="font-size:10px;">Related</span>';
+  }
+  html += '<span class="bc-date">' + fmtDateTime(c.date) + '</span>';
+  html += '</div></div>';
+  return html;
+}
+
+function buildContactSummary(contacts) {
+  if (!contacts || contacts.length === 0) {
+    return '<div class="first-contact-hint">First contact — no prior history</div>';
+  }
+
+  var total = contacts.length;
+  var frustration = total <= 1 ? 'low' : (total <= 3 ? 'med' : 'high');
+  var escalated = contacts.filter(function(c) { return c.escalated; }).length;
+  var mochiCount = contacts.filter(function(c) { return c.channel === 'Mochi'; }).length;
+  var ticketCount = contacts.filter(function(c) { return c.channel !== 'Mochi'; }).length;
+  var openCount = contacts.filter(function(c) { return c.status === 'open' || c.status === 'new'; }).length;
+
+  // Count label
+  var countLabel = total + ' previous contact' + (total > 1 ? 's' : '');
+
+  // Build summary sentences
+  var parts = [];
+
+  // Channel breakdown
+  var channels = [];
+  if (ticketCount > 0) channels.push(ticketCount + ' ticket' + (ticketCount > 1 ? 's' : ''));
+  if (mochiCount > 0) channels.push(mochiCount + ' Mochi chat' + (mochiCount > 1 ? 's' : ''));
+  if (channels.length > 0) parts.push(channels.join(', '));
+
+  // Escalation signal
+  if (escalated > 0) parts.push(escalated + ' escalated');
+
+  // Open tickets
+  if (openCount > 0) parts.push(openCount + ' still open');
+
+  // Most recent contact reason
+  var latest = contacts[0];
+  var latestReason = latest.reason || 'support inquiry';
+  var latestChannel = latest.channel || 'Email';
+  var latestDate = fmtDateTime(latest.date);
+
+  // Time span
+  var oldest = contacts[contacts.length - 1];
+  var spanText = '';
+  if (oldest.date && latest.date) {
+    var spanMs = new Date(latest.date).getTime() - new Date(oldest.date).getTime();
+    var spanDays = Math.round(spanMs / 86400000);
+    if (spanDays <= 1) spanText = 'all within the last day';
+    else if (spanDays <= 7) spanText = 'over the past ' + spanDays + ' days';
+    else spanText = 'over the past ' + Math.round(spanDays / 7) + ' week' + (spanDays > 13 ? 's' : '');
+  }
+
+  var html = '<div class="contact-summary frustration-' + frustration + '">';
+  html += '<div class="cs-count"><span class="cs-dot"></span>' + escapeHtml(countLabel) + '</div>';
+  html += '<div class="cs-body">';
+  html += escapeHtml(parts.join(' \u00B7 '));
+  if (spanText) html += ' \u00B7 ' + escapeHtml(spanText);
+  html += '.<br>Last: ' + escapeHtml(latestChannel) + ' re: ' + escapeHtml(latestReason) + ' (' + escapeHtml(latestDate) + ')';
+  html += '</div></div>';
+  return html;
+}
+
+function toggleContacts(btn) {
+  var extra = document.getElementById('contacts-extra');
+  if (extra.style.display === 'none') {
+    extra.style.display = 'block';
+    btn.textContent = 'Show less';
+  } else {
+    extra.style.display = 'none';
+    btn.textContent = btn.textContent.replace('Show less', 'Show more');
+  }
+}
+
+// ── Triage Redesign Helpers ──────────────────────────────
+function getStepIcon(type) {
+  if (type === 'investigate') return '\uD83D\uDD0D';
+  if (type === 'ask_info') return '\u2753';
+  if (type === 'customer_action') return '\u2714';
+  if (type === 'ai_done') return '\u2713';
+  if (type === 'kb_article') return '\uD83D\uDCD6';
+  return '?';
+}
+
+function getActionLabel(type) {
+  if (type === 'investigate') return 'Investigate';
+  if (type === 'ask_info') return 'Ask Customer';
+  if (type === 'customer_action') return 'Guide Customer';
+  if (type === 'kb_article') return 'View Article';
+  return 'Take Action';
+}
+
+function handleAction(type) {
+  // Placeholder — will be wired to real actions
+  if (typeof showToast === 'function') {
+    showToast('Action: ' + type + ' (demo)');
+  }
+}
+
+async function executeCTA(ctaType, btnEl) {
+  if (!ctaType || !requesterEmail) return;
+  btnEl.disabled = true;
+  var origText = btnEl.innerHTML;
+  btnEl.innerHTML = '\u23F3 Running...';
+  try {
+    var resp = await zaraFetch(serverUrl + '/api/execute', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: requesterEmail,
+        action: ctaType,
+        lobId: currentLob ? currentLob.lobId : null,
+      }),
+    });
+    var result = await resp.json();
+    if (result.success) {
+      btnEl.classList.add('cta-done');
+      btnEl.innerHTML = origText.replace('\u23F3 Running...', '') + '<span class="cta-status">\u2713</span>';
+      showToast('CTA completed: ' + ctaType);
+    } else {
+      btnEl.innerHTML = origText;
+      btnEl.disabled = false;
+      showToast('CTA failed: ' + (result.error || 'unknown error'), true);
+    }
+  } catch (err) {
+    btnEl.innerHTML = origText;
+    btnEl.disabled = false;
+    showToast('CTA error: ' + err.message, true);
+  }
+}
+
+function showToast(msg, isError) {
+  var t = document.createElement('div');
+  t.style.cssText = 'position:fixed;bottom:12px;left:14px;right:14px;padding:8px 14px;border-radius:6px;font-size:12px;font-weight:500;color:#fff;z-index:1000;text-align:center;transition:opacity .3s;';
+  t.style.background = isError ? 'var(--red)' : 'var(--green)';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(function() { t.style.opacity = '0'; setTimeout(function() { t.remove(); }, 300); }, 2500);
+}
+
+function buildUrgencyStrip(contacts, urgencyId) {
+  if (!contacts || contacts.length === 0) {
+    return '<div class="urgency-strip frustration-low" onclick="toggleUrgencyExpand(\'' + urgencyId + '\', this)">' +
+      '<span class="us-dot"></span>First contact — no prior history' +
+      '<span class="us-chevron">\u25BC</span></div>' +
+      '<div class="urgency-contacts" id="' + urgencyId + '"></div>';
+  }
+
+  var total = contacts.length;
+  var frustration = total <= 1 ? 'low' : (total <= 3 ? 'med' : 'high');
+  var escalated = contacts.filter(function(c) { return c.escalated; }).length;
+
+  // Time span
+  var oldest = contacts[contacts.length - 1];
+  var latest = contacts[0];
+  var spanText = '';
+  if (oldest.date && latest.date) {
+    var spanMs = new Date(latest.date).getTime() - new Date(oldest.date).getTime();
+    var spanDays = Math.round(spanMs / 86400000);
+    if (spanDays <= 1) spanText = '';
+    else if (spanDays <= 7) spanText = spanDays + ' days';
+    else spanText = Math.round(spanDays / 7) + ' week' + (spanDays > 13 ? 's' : '');
+  }
+
+  // Build compact line
+  var parts = [];
+  var ordinal = total === 1 ? '2nd' : total === 2 ? '3rd' : (total + 1) + 'th';
+  parts.push(ordinal + ' contact');
+  if (escalated > 0) parts.push(escalated + ' escalated');
+  if (spanText) parts.push(spanText);
+
+  var html = '<div class="urgency-strip frustration-' + frustration + '" onclick="toggleUrgencyExpand(\'' + urgencyId + '\', this)">';
+  html += '<span class="us-dot"></span>';
+  html += escapeHtml(parts.join(' \u00B7 '));
+  html += '<span class="us-chevron">\u25BC</span>';
+  html += '</div>';
+
+  // Expandable — condensed summary of previous correspondence
+  var currentProblem = (briefData && briefData.currentProblem) ? briefData.currentProblem.problem : '';
+  var corr = (briefData && briefData.correspondenceSummaries) ? briefData.correspondenceSummaries : [];
+  var items = corr.length > 0 ? corr : contacts;
+
+  // Tally resolved/open/escalated, collect unique topics, check relevance
+  var resolvedCount = 0, openCount = 0, escalatedCount = 0, relatedCount = 0;
+  var topicCounts = {}; // topic → count
+  var currentLower = currentProblem ? currentProblem.toLowerCase() : '';
+  for (var i = 0; i < items.length; i++) {
+    var item = items[i];
+    var isResolved = item.status === 'solved' || item.status === 'closed' || item.status === 'resolved';
+    if (isResolved) resolvedCount++; else openCount++;
+    if (item.escalated || item.status === 'escalated') escalatedCount++;
+
+    var topic = item.summary || item.reason || 'General inquiry';
+    topicCounts[topic] = (topicCounts[topic] || 0) + 1;
+
+    // Relevance: check if topic keywords overlap with current problem
+    if (currentLower && topic !== 'General inquiry') {
+      var topicWords = topic.toLowerCase().replace(/[\/\-]/g, ' ').split(/\s+/);
+      for (var tw = 0; tw < topicWords.length; tw++) {
+        if (topicWords[tw].length > 3 && currentLower.indexOf(topicWords[tw]) !== -1) {
+          relatedCount++; break;
+        }
+      }
+    }
+  }
+
+  // Build topic list sorted by frequency, max 3
+  var topicList = [];
+  for (var t in topicCounts) { topicList.push({ name: t, count: topicCounts[t] }); }
+  topicList.sort(function(a, b) { return b.count - a.count; });
+
+  html += '<div class="urgency-contacts" id="' + urgencyId + '">';
+  html += '<div class="urgency-detail">';
+
+  // 1-3 sentence summary
+  var summaryParts = [];
+  var topicLabels = [];
+  for (var ti = 0; ti < Math.min(topicList.length, 3); ti++) {
+    var tl = topicList[ti];
+    topicLabels.push(tl.name + (tl.count > 1 ? ' (' + tl.count + 'x)' : ''));
+  }
+  summaryParts.push('Previous contacts: ' + topicLabels.join(', ') + '.');
+  if (escalatedCount > 0) {
+    summaryParts.push(escalatedCount + ' of ' + total + ' required escalation.');
+  }
+
+  html += '<div style="margin-bottom:6px;">' + escapeHtml(summaryParts.join(' ')) + '</div>';
+
+  // Tags row
+  html += '<div style="display:flex;flex-wrap:wrap;gap:6px;">';
+  if (resolvedCount > 0) {
+    html += statusBadge(resolvedCount === total ? 'All resolved' : resolvedCount + '/' + total + ' resolved');
+  }
+  if (openCount > 0) {
+    html += statusBadge(openCount + ' open');
+  }
+  if (relatedCount > 0) {
+    html += '<span class="badge badge-amber" style="font-size:10px;">' + relatedCount + ' related to current issue</span>';
+  } else {
+    html += '<span class="badge badge-blue" style="font-size:10px;">No prior contacts match current issue</span>';
+  }
+  html += '</div>';
+
+  html += '</div></div>';
+
+  return html;
+}
+
+function toggleUrgencyExpand(id, stripEl) {
+  var contacts = document.getElementById(id);
+  if (!contacts) return;
+  contacts.classList.toggle('visible');
+  stripEl.classList.toggle('expanded');
+}
+
+function toggleCompletedSteps(id, btn) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  var showing = el.classList.toggle('visible');
+  var count = btn.textContent.match(/\d+/);
+  btn.textContent = showing ? 'Hide completed' : (count ? count[0] + ' completed' : 'Show completed');
+}
+
+// ── Draft v2 Interactions (new card design) ──────────────
+function reviewDraft2(id) {
+  var preview = document.getElementById(id + '-preview');
+  var edit = document.getElementById(id + '-edit');
+  if (preview && edit) {
+    preview.classList.add('hidden');
+    edit.classList.add('active');
+    var textarea = document.getElementById(id + '-textarea');
+    if (textarea) textarea.focus();
+  }
+}
+
+function sendDraft2(id) {
+  var textarea = document.getElementById(id + '-textarea');
+  var edit = document.getElementById(id + '-edit');
+  var preview = document.getElementById(id + '-preview');
+  var feedbackEl = document.getElementById(id + '-feedback');
+  var actionsEl = document.getElementById(id + '-actions');
+  var text = textarea ? textarea.value : (preview ? preview.textContent : '');
+  if (!text || !text.trim()) { showToast('Draft is empty', true); return; }
+
+  // Collapse edit mode
+  if (preview) { preview.textContent = text; preview.classList.remove('hidden'); }
+  if (edit) edit.classList.remove('active');
+
+  var original = (window._draftOriginals && window._draftOriginals[id]) || '';
+  var edited = text.trim();
+  var origNorm = original.toLowerCase().replace(/\s+/g, ' ').trim();
+  var editNorm = edited.toLowerCase().replace(/\s+/g, ' ').trim();
+
+  if (origNorm === editNorm) {
+    // No changes — sent as-is
+    showToast('Reply sent');
+    if (actionsEl) actionsEl.innerHTML = '<div class="draft-sent">\u2713 Sent</div>';
+    return;
+  }
+
+  // Agent modified the draft — send feedback
+  showToast('Reply sent — learning from your edit...');
+  if (actionsEl) actionsEl.innerHTML = '<div class="draft-sent">\u2713 Sent</div>';
+
+  var cs = briefData && briefData.customerState;
+  var payload = {
+    ticketId: (briefData && briefData.ticketId) || null,
+    customerEmail: (lookupData && lookupData.customer && lookupData.customer.email) || null,
+    problemType: cs && cs.problem ? cs.problem.type : null,
+    journeyStage: cs && cs.journeyStage ? cs.journeyStage.label : null,
+    confidence: cs && cs.heroCard ? cs.heroCard.confidence : null,
+    originalDraft: original,
+    editedDraft: edited,
+  };
+
+  zaraFetch(serverUrl + '/api/feedback', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(result) {
+    if (result.success && result.deviationType && result.deviationType !== 'minor_edit' && feedbackEl) {
+      var labels = {
+        tone_change: 'Tone adjusted',
+        content_added: 'Detail added',
+        content_removed: 'Simplified',
+        different_approach: 'Different approach',
+      };
+      var label = labels[result.deviationType] || 'Edit noted';
+      feedbackEl.innerHTML = '<span class="feedback-learned">\uD83E\uDDE0 Learned: ' + escapeHtml(label) + '</span>' +
+        (result.kbUpdated ? '<span class="feedback-kb">KB updated to v' + escapeHtml(result.kbVersion) + '</span>' : '');
+      feedbackEl.style.display = 'block';
+    }
+  })
+  .catch(function() { /* silent — feedback is best-effort */ });
+}
+
+// ── Email Draft Interactions (legacy — used by context tab) ──────
+function toggleDraftExpand(id) {
+  var el = document.getElementById(id + '-preview');
+  if (el) el.classList.toggle('expanded');
+}
+
+function copyDraft(draftId) {
+  var textarea = document.getElementById(draftId + '-textarea');
+  var text = textarea ? textarea.value : '';
+  if (!text) { showToast('Nothing to copy', true); return; }
+  navigator.clipboard.writeText(text).then(function() {
+    showToast('Copied to clipboard');
+  }).catch(function() {
+    showToast('Copy failed', true);
+  });
+}
+
+function reviewDraft(id) {
+  var preview = document.getElementById(id + '-preview');
+  var edit = document.getElementById(id + '-edit');
+  if (preview && edit) {
+    preview.classList.add('hidden');
+    edit.classList.add('active');
+    var textarea = document.getElementById(id + '-textarea');
+    if (textarea) textarea.focus();
+  }
+}
+
+function sendDraft(id) {
+  var textarea = document.getElementById(id + '-textarea');
+  var edit = document.getElementById(id + '-edit');
+  var preview = document.getElementById(id + '-preview');
+  var text = textarea ? textarea.value : (preview ? preview.textContent : '');
+  if (!text || !text.trim()) { showToast('Draft is empty', true); return; }
+  // TODO: wire to Zendesk reply API
+  showToast('Email sent (demo)');
+  if (preview) { preview.textContent = text; preview.classList.remove('hidden'); }
+  if (edit) edit.classList.remove('active');
+}
+
+// ── Escalation Note Generator ────────────────────────────────
+async function generateEscalationNote() {
+  var btn = document.getElementById('escalate-btn');
+  var result = document.getElementById('escalation-result');
+  btn.disabled = true;
+  btn.textContent = 'Generating...';
+  result.style.display = 'block';
+  result.textContent = 'Generating escalation note...';
+
+  try {
+    var resp = await zaraFetch(serverUrl + '/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: '[SYSTEM: Generate a concise internal escalation note for this customer. Include: customer email, identified problem, escalation reasons, what has been tried, and recommended next steps for the specialist team. Format as a professional internal note.]\n\nGenerate an internal escalation note for this customer.',
+        sessionId: sessionId,
+        lobId: currentLob ? currentLob.lobId : null,
+        customerContext: briefData ? {
+          email: requesterEmail,
+          userId: briefData.individualId,
+        } : null,
+      }),
+    });
+    var data = await resp.json();
+    result.textContent = data.response || 'No response generated.';
+    btn.textContent = 'Regenerate';
+    btn.disabled = false;
+  } catch (err) {
+    result.textContent = 'Error: ' + err.message;
+    btn.textContent = 'Retry';
+    btn.disabled = false;
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// TAB 3: SLA — Live SLA clocks
+// ══════════════════════════════════════════════════════════════
+var _slaInterval = null;
+var _slaMetrics = null;
+
+function slaFormatDuration(ms) {
+  var abs = Math.abs(ms);
+  var totalSec = Math.floor(abs / 1000);
+  var d = Math.floor(totalSec / 86400);
+  var h = Math.floor((totalSec % 86400) / 3600);
+  var m = Math.floor((totalSec % 3600) / 60);
+  var s = totalSec % 60;
+  if (d > 0) return d + 'd ' + h + 'h ' + m + 'm';
+  if (h > 0) return h + 'h ' + m + 'm ' + s + 's';
+  return m + 'm ' + s + 's';
+}
+
+function slaPct(elapsedMs, targetMs) {
+  if (targetMs <= 0) return 100;
+  return Math.min((elapsedMs / targetMs) * 100, 100);
+}
+
+function slaStatus(elapsedMs, targetMs) {
+  var p = slaPct(elapsedMs, targetMs);
+  if (elapsedMs >= targetMs) return 'breached';
+  if (p > 85) return 'red';
+  if (p > 60) return 'amber';
+  return 'green';
+}
+
+async function loadSla(email) {
+  var container = document.getElementById('sla-data');
+  container.innerHTML = '<div class="ctx-placeholder">Loading SLA data...</div>';
+
+  try {
+    var resp = await zaraFetch(serverUrl + '/api/sla', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email }),
+    });
+    var data = await resp.json();
+
+    if (data.error) {
+      container.innerHTML = '<div class="ctx-placeholder">' + escapeHtml(data.error) + '</div>';
+      return;
+    }
+    if (!data.found) {
+      container.innerHTML = '<div class="ctx-placeholder">No active tickets found for SLA tracking.</div>';
+      return;
+    }
+
+    _slaMetrics = data.metrics;
+    renderSlaMetrics(container, data);
+    startSlaCountdown(container);
+  } catch (err) {
+    container.innerHTML = '<div class="ctx-placeholder">Failed to load SLA data.</div>';
+  }
+}
+
+function renderSlaMetrics(container, data) {
+  var metrics = data.metrics;
+  var html = '';
+
+  // Path + severity + status badges
+  var pathClass = 'sla-badge-blue';
+  if (data.path && data.path.indexOf('Partner') === 0) pathClass = 'sla-badge-purple';
+  else if (data.path && data.path.indexOf('Escalated') === 0) pathClass = 'sla-badge-orange';
+
+  // Severity badge color
+  var sevClass = 'sla-badge-gray';
+  if (data.severity === 's1') sevClass = 'sla-badge-red';
+  else if (data.severity === 's2') sevClass = 'sla-badge-amber';
+
+  // Ticket status badge
+  var statusMap = { open: 'sla-badge-red', pending: 'sla-badge-yellow', hold: 'sla-badge-amber', new: 'sla-badge-blue', solved: 'sla-badge-green', closed: 'sla-badge-green' };
+  var statusClass = statusMap[data.ticketStatus] || 'sla-badge-gray';
+
+  html += '<div class="sla-meta">';
+  html += '<span class="sla-badge ' + pathClass + '">' + escapeHtml(data.path || 'L0 Direct') + '</span>';
+  html += '<span class="sla-badge ' + sevClass + '">' + escapeHtml(data.severityLabel || (data.priority || 'normal').toUpperCase()) + '</span>';
+  html += '<span class="sla-badge ' + statusClass + '">' + escapeHtml((data.ticketStatus || 'open').toUpperCase()) + '</span>';
+  html += '<span class="sla-badge sla-badge-gray">#' + escapeHtml(String(data.ticketId || '')) + '</span>';
+  html += '</div>';
+
+  // Ticket subject
+  if (data.ticketSubject) {
+    html += '<div class="sla-ticket-subject" title="' + escapeHtml(data.ticketSubject) + '">' + escapeHtml(data.ticketSubject) + '</div>';
+  }
+
+  // Ticket age
+  if (data.ticketCreatedAt) {
+    var ageMs = Date.now() - new Date(data.ticketCreatedAt).getTime();
+    var ageDays = Math.floor(ageMs / 86400000);
+    var ageHours = Math.floor((ageMs % 86400000) / 3600000);
+    var ageText = ageDays > 0 ? ageDays + 'd ' + ageHours + 'h old' : ageHours + 'h old';
+    html += '<div class="sla-ticket-age">Ticket age: ' + ageText + '</div>';
+  }
+
+  // Partner escalation status
+  html += '<div class="sla-partner-row">';
+  html += '<span class="sla-partner-label">Partner Escalation</span>';
+  if (data.partner) {
+    html += '<span class="sla-badge sla-badge-purple">' + escapeHtml(data.partner) + '</span>';
+  } else {
+    html += '<span class="sla-badge sla-badge-gray">None</span>';
+  }
+  html += '</div>';
+
+  // Metrics
+  var coreLabels = { '1st Response': 1, 'Next Response': 1, 'Resolution': 1 };
+  var coreDone = false;
+
+  for (var i = 0; i < metrics.length; i++) {
+    var m = metrics[i];
+
+    if (!coreLabels[m.label] && !coreDone) {
+      html += '<div class="sla-divider"></div>';
+      coreDone = true;
+    }
+
+    if (m.placeholder) {
+      html += '<div class="sla-metric" data-sla-label="' + escapeHtml(m.label) + '">' +
+        '<div class="sla-metric-hdr">' +
+          '<span class="sla-metric-lbl">' + escapeHtml(m.label) + '</span>' +
+          '<span class="sla-metric-time sla-not-configured">Not configured</span>' +
+        '</div></div>';
+      continue;
+    }
+
+    var st = m.met ? 'met' : slaStatus(m.elapsedMs, m.targetMs);
+    var p = m.met ? 100 : slaPct(m.elapsedMs, m.targetMs);
+    var timeText;
+
+    if (m.met) {
+      timeText = 'Met' + (m.elapsedMs > 0 ? ' (' + slaFormatDuration(m.elapsedMs) + ')' : '');
+    } else if (m.elapsedMs >= m.targetMs) {
+      timeText = 'BREACHED ' + slaFormatDuration(m.elapsedMs - m.targetMs) + ' ago';
+    } else {
+      timeText = slaFormatDuration(m.targetMs - m.elapsedMs) + ' left';
+    }
+
+    html += '<div class="sla-metric sla-st-' + st + '" data-sla-label="' + escapeHtml(m.label) + '">' +
+      '<div class="sla-metric-hdr">' +
+        '<span class="sla-metric-lbl">' + escapeHtml(m.label) + '</span>' +
+        '<span class="sla-metric-time">' + timeText + '</span>' +
+      '</div>' +
+      '<div class="sla-bar-bg"><div class="sla-bar-fill" style="width:' + p + '%"></div></div>' +
+    '</div>';
+  }
+
+  // ── Actions Taken Section ──
+  html += '<div class="sla-divider" style="margin-top:18px;"></div>';
+  html += '<div class="ctx-section" style="margin-top:12px;">';
+  html += '<h4 style="font-size:11px;font-weight:700;letter-spacing:0.5px;color:var(--text-secondary);margin:0 0 10px;">ACTIONS TAKEN</h4>';
+  html += '<div id="actions-trail">';
+  html += '<div style="font-size:12px;color:var(--text-muted);">Loading trail...</div>';
+  html += '</div></div>';
+
+  container.innerHTML = html;
+
+  // Load actions trail
+  loadActionsTrail();
+}
+
+async function loadActionsTrail() {
+  var trailEl = document.getElementById('actions-trail');
+  if (!trailEl || !requesterEmail) return;
+
+  try {
+    var resp = await zaraFetch(serverUrl + '/api/context?email=' + encodeURIComponent(requesterEmail));
+    var data = await resp.json();
+    var actions = data.actions || data.trail || [];
+    if (actions.length === 0) {
+      trailEl.innerHTML = '<div style="font-size:12px;color:var(--text-muted);">No actions recorded yet.</div>';
+      return;
+    }
+    var html = '';
+    for (var i = 0; i < Math.min(actions.length, 10); i++) {
+      var a = actions[i];
+      var trailType = (a.source || 'system').toLowerCase();
+      if (trailType === 'zara' || trailType === 'ai') trailType = 'zara';
+      else if (trailType === 'agent' || trailType === 'user') trailType = 'agent';
+      else trailType = 'system';
+      html += '<div class="trail-item">';
+      html += '<div class="trail-dot td-' + trailType + '"></div>';
+      html += '<div class="trail-body">';
+      html += '<div class="trail-summary">' + escapeHtml(a.summary || a.action || a.description || '') + '</div>';
+      html += '<div class="trail-time">' + escapeHtml(a.time || fmtDateTime(a.timestamp || a.created_at) || '') + '</div>';
+      html += '</div>';
+      html += '<span class="trail-source">' + escapeHtml(trailType === 'zara' ? 'Zara' : trailType === 'agent' ? 'Agent' : 'System') + '</span>';
+      html += '</div>';
+    }
+    trailEl.innerHTML = html;
+  } catch (e) {
+    trailEl.innerHTML = '<div style="font-size:12px;color:var(--text-muted);">Could not load trail.</div>';
+  }
+}
+
+function startSlaCountdown(container) {
+  if (_slaInterval) clearInterval(_slaInterval);
+  _slaInterval = setInterval(function() {
+    if (!_slaMetrics) return;
+    var n = Date.now();
+    for (var i = 0; i < _slaMetrics.length; i++) {
+      var m = _slaMetrics[i];
+      if (m.met || !m.breachAt) continue;
+      m.elapsedMs = m.targetMs - Math.max(m.breachAt - n, 0);
+      if (m.elapsedMs >= m.targetMs) m.elapsedMs = n - (m.breachAt - m.targetMs);
+    }
+    // Update bars in place
+    for (var i = 0; i < _slaMetrics.length; i++) {
+      var m = _slaMetrics[i];
+      var el = container.querySelector('[data-sla-label="' + m.label + '"]');
+      if (!el || m.placeholder) continue;
+
+      var st = m.met ? 'met' : slaStatus(m.elapsedMs, m.targetMs);
+      var p = m.met ? 100 : slaPct(m.elapsedMs, m.targetMs);
+      var timeText;
+      if (m.met) {
+        timeText = 'Met' + (m.elapsedMs > 0 ? ' (' + slaFormatDuration(m.elapsedMs) + ')' : '');
+      } else if (m.elapsedMs >= m.targetMs) {
+        timeText = 'BREACHED ' + slaFormatDuration(m.elapsedMs - m.targetMs) + ' ago';
+      } else {
+        timeText = slaFormatDuration(m.targetMs - m.elapsedMs) + ' left';
+      }
+
+      el.className = 'sla-metric sla-st-' + st;
+      var timeEl = el.querySelector('.sla-metric-time');
+      if (timeEl) timeEl.textContent = timeText;
+      var fillEl = el.querySelector('.sla-bar-fill');
+      if (fillEl) fillEl.style.width = p + '%';
+    }
+  }, 1000);
+}
+
+// ══════════════════════════════════════════════════════════════
+// TAB 4: AI QUERY — CS-restricted chat
+// ══════════════════════════════════════════════════════════════
+function updateAIGreeting() {
+  var greetingEl = document.getElementById('ai-greeting-text');
+  if (!greetingEl || !currentLob) return;
+  var lobName = currentLob.displayName || 'this customer';
+  var topics = '<strong>account, billing, troubleshooting</strong>';
+  if (currentLob.lobId === 'meow_mobile') {
+    topics = '<strong>account, orders, eSIM setup, billing, port-in status</strong>, and <strong>troubleshooting</strong>';
+  } else if (currentLob.lobId === 'meow_pager') {
+    topics = '<strong>pager status, signal issues, message queue</strong>, and <strong>device replacement</strong>';
+  } else if (currentLob.lobId === 'meow_stem') {
+    topics = '<strong>tracker, subscription, workout data, challenges</strong>, and <strong>app issues</strong>';
+  }
+  greetingEl.innerHTML = 'I can help with ' + escapeHtml(lobName) + ' ' + topics + '. What do you need?';
+}
+
+var CS_SYSTEM_PREFIX = '[SYSTEM: You are Zara, a customer support AI assistant for Meow Mobile. ONLY answer questions related to: customer accounts, orders, billing, payments, eSIM/SIM troubleshooting, port-in/number porting, network issues, Mochi chat history, ticket management, and general customer support operations. If the user asks about topics unrelated to customer support (e.g. coding, general knowledge, creative writing, etc.), politely decline and say: "I can only help with customer support topics. Try asking about this customer\'s account, orders, or issues."]\n\n';
+
+function addAIMsg(html, sender) {
+  var container = document.getElementById('ai-messages');
+  var div = document.createElement('div');
+  div.className = 'ai-msg ' + sender;
+  var avContent = sender === 'user' ? '&#x1F464;' : '&#x2728;';
+  div.innerHTML = '<div class="ai-av">' + avContent + '</div><div class="ai-body">' + html + '</div>';
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+  return div;
+}
+
+function addLoadingMsg() {
+  return addAIMsg('<div class="loading-dots"><span></span><span></span><span></span></div><span class="thinking"> Thinking & querying data sources...</span>', 'assistant');
+}
+
+async function sendAI() {
+  if (isLoading) return;
+  var input = document.getElementById('ai-input');
+  var text = input.value.trim();
+  if (!text) return;
+
+  addAIMsg(escapeHtml(text), 'user');
+  input.value = '';
+  input.style.height = 'auto';
+
+  isLoading = true;
+  document.getElementById('send-btn').disabled = true;
+
+  var loading = addLoadingMsg();
+  var startTime = Date.now();
+
+  try {
+    var resp = await zaraFetch(serverUrl + '/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: CS_SYSTEM_PREFIX + text,
+        sessionId: sessionId,
+        lobId: currentLob ? currentLob.lobId : null,
+        customerContext: briefData ? {
+          email: requesterEmail,
+          userId: briefData.individualId,
+        } : null,
+      }),
+    });
+    var data = await resp.json();
+    loading.remove();
+
+    var elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+    var html = markdownToHtml(data.response || 'No response received.');
+
+    if (data.toolsUsed && data.toolsUsed.length > 0) {
+      var toolNames = data.toolsUsed.map(function(t) { return t.tool; }).join(', ');
+      html += '<div class="tools-badge">Tools: ' + escapeHtml(toolNames) + ' &middot; ' + elapsed + 's</div>';
+    }
+
+    addAIMsg(html, 'assistant');
+  } catch (err) {
+    loading.remove();
+    addAIMsg('<span class="error-text">Error: ' + escapeHtml(err.message) + '</span>', 'assistant');
+  } finally {
+    isLoading = false;
+    document.getElementById('send-btn').disabled = false;
+  }
+}
+
+function handleAIKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendAI(); }
+}
+
+document.getElementById('ai-input').addEventListener('input', function() {
+  this.style.height = 'auto';
+  this.style.height = Math.min(this.scrollHeight, 80) + 'px';
+});
+</script>
+</body>
+</html>
