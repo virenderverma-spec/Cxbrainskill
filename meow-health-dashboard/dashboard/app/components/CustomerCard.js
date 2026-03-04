@@ -13,6 +13,19 @@ export default function CustomerCard({ customer, onSelect }) {
         <div className="flex items-start justify-between mb-3">
           <div className="flex items-center gap-2 min-w-0">
             <h3 className="text-[15px] font-semibold text-white truncate">{customer.name}</h3>
+            <span
+              className="flex-shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold border"
+              style={{
+                color: customer.brandColor || '#6C5CE7',
+                borderColor: (customer.brandColor || '#6C5CE7') + '40',
+                backgroundColor: (customer.brandColor || '#6C5CE7') + '15',
+              }}
+            >
+              {customer.brandName === 'Meow Mobile' ? 'Mobile' :
+               customer.brandName === 'Meow Pager' ? 'Pager' :
+               customer.brandName === 'Meow STEM+' ? 'STEM+' :
+               customer.brandName || 'Mobile'}
+            </span>
             {customer.isS100 && (
               <span className="flex-shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold bg-ssc-bg text-ssc-gold border border-ssc-border">
                 S100

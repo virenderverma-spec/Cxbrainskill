@@ -14,7 +14,7 @@ const FILTERS = [
 export default function Header({
   severityCounts, total, lastUpdated,
   onRefresh, onExport, searchTerm, onSearchChange, statusFilter, onStatusChange,
-  ticketCount,
+  ticketCount, brandFilter, onBrandChange, availableBrands,
 }) {
   const timeAgo = lastUpdated
     ? `${Math.round((Date.now() - lastUpdated.getTime()) / 60000)}m ago`
@@ -101,6 +101,16 @@ export default function Header({
             );
           })}
         </div>
+        <select
+          value={brandFilter}
+          onChange={(e) => onBrandChange(e.target.value)}
+          className="px-3 py-1.5 bg-dark-card border border-dark-border rounded-md text-xs text-gray-300 focus:outline-none focus:border-accent-blue/40 cursor-pointer"
+        >
+          <option value="all">All Brands</option>
+          {(availableBrands || []).map(b => (
+            <option key={b.id} value={b.id}>{b.displayName}</option>
+          ))}
+        </select>
         <input
           type="text"
           placeholder="Search customers..."

@@ -1,6 +1,33 @@
 import { NextResponse } from 'next/server';
 import { runSQL } from '../../lib/databricks';
 
+// --- Brand Registry ---
+
+const BRAND_REGISTRY = {
+  meow_mobile: { displayName: 'Meow Mobile', shortName: 'Mobile', color: '#6C5CE7' },
+  meow_pager:  { displayName: 'Meow Pager',  shortName: 'Pager',  color: '#E17055' },
+  meow_stem:   { displayName: 'Meow STEM+',  shortName: 'STEM+',  color: '#00B894' },
+};
+
+const BRAND_ALIASES = {
+  'meow_mobile': 'meow_mobile', 'meow mobile': 'meow_mobile', 'mm': 'meow_mobile', 'meow': 'meow_mobile',
+  'meow_pager': 'meow_pager', 'meow pager': 'meow_pager', 'pager': 'meow_pager', 'pgr': 'meow_pager',
+  'meow_stem': 'meow_stem', 'meow stem': 'meow_stem', 'stem': 'meow_stem', 'stem+': 'meow_stem', 'stm': 'meow_stem',
+};
+
+function resolveBrand(raw) {
+  if (!raw) return 'meow_mobile';
+  return BRAND_ALIASES[raw.toLowerCase().trim()] || 'meow_mobile';
+}
+
+const BRAND_TABLE = process.env.DATABRICKS_BRAND_TABLE || 'rds-prod_catalog.cj_prod.customer_brand_mapping';
+const BRAND_COLUMN = process.env.DATABRICKS_BRAND_COLUMN || 'brand';
+
+const BRAND_LOOKUP_SQL = `
+  SELECT LOWER(customer_email) as email, ${BRAND_COLUMN} as brand
+  FROM \`${BRAND_TABLE.replace(/\./g, '`.`')}\`
+`;
+
 // --- Zendesk API ---
 const ZENDESK_SUBDOMAIN = process.env.ZENDESK_SUBDOMAIN;
 const ZENDESK_EMAIL = process.env.ZENDESK_EMAIL;
@@ -709,22 +736,24 @@ function proactivePriorityFromCategory(healthCategory) {
 
 function proactiveSubject(customer) {
   const firstName = (customer.name || 'Customer').split(' ')[0];
+  const brand = customer.brandName || 'Meow Mobile';
   const subjects = {
-    order_created: `${firstName}, we noticed your Meow Mobile order needs attention`,
-    payment: `${firstName}, let's get your Meow Mobile payment sorted`,
+    order_created: `${firstName}, we noticed your ${brand} order needs attention`,
+    payment: `${firstName}, let's get your ${brand} payment sorted`,
     number_selection: `${firstName}, your number transfer is in progress`,
     esim_activation: `${firstName}, we're working on your eSIM activation`,
     nw_enabled: `${firstName}, let's get your network up and running`,
     airvet_account: `${firstName}, one last step — setting up your Airvet account`,
   };
   if (customer.issueTags?.includes('Call Drops')) {
-    return `${firstName}, we noticed call quality issues on your Meow Mobile line`;
+    return `${firstName}, we noticed call quality issues on your ${brand} line`;
   }
-  return subjects[customer.stuckAt] || `${firstName}, we're here to help with your Meow Mobile setup`;
+  return subjects[customer.stuckAt] || `${firstName}, we're here to help with your ${brand} setup`;
 }
 
 function proactiveTags(customer) {
   const tags = ['proactive_outreach', 'internal_ticket_created'];
+  if (customer.brandId) tags.push(`lob:${customer.brandId}`);
   if (customer.stuckAt) tags.push(`stuck_${customer.stuckAt}`);
   if (customer.esimStatus === 'ERROR' || customer.esimStatus === 'FAILED') tags.push('esim_error');
   if (customer.portinStatus === 'CONFLICT') tags.push('portin_conflict');
@@ -746,6 +775,7 @@ function proactiveInternalNote(customer) {
   const stuckDays = customer.stuckHours ? Math.round(customer.stuckHours / 24) : 0;
   let note = `## Proactive Health Alert\n`;
   note += `**Customer:** ${customer.name || 'Unknown'} (${customer.email || 'no email'})\n`;
+  note += `**Brand:** ${customer.brandName || 'Meow Mobile'}\n`;
   note += `**Health Score:** ${customer.healthScore}/100 (${customer.healthCategory})\n`;
   note += `**Stuck at:** ${customer.stuckStage || customer.stuckAt} for ${stuckDays}d (${Math.round(customer.stuckHours || 0)}h)\n\n`;
   note += `### Customer Journey Snapshot\n`;
@@ -876,13 +906,124 @@ async function autoCreateProactiveTickets(customers) {
 export async function GET() {
   try {
     // Run Databricks queries + Zendesk live ticket search in parallel
-    const [stuckCustomers, ticketRows, liveZendeskTickets, postOnboardingCustomers, paymentFailures] = await Promise.all([
+    const [stuckCustomers, ticketRows, liveZendeskTickets, postOnboardingCustomers, paymentFailures, brandRows] = await Promise.all([
       runSQL(STUCK_CUSTOMERS_SQL),
       runSQL(ZENDESK_TICKETS_SQL),
       fetchActiveZendeskTickets(),
       runSQL(POST_ONBOARDING_SQL).catch(err => { console.error('Post-onboarding SQL error:', err.message); return []; }),
       runSQL(PAYMENT_FAILURES_SQL).catch(err => { console.error('Payment failures SQL error:', err.message); return []; }),
+      runSQL(BRAND_LOOKUP_SQL).catch(err => { console.error('Brand lookup SQL error (table may not exist yet):', err.message); return []; }),
     ]);
+
+    // Build brand lookup map (email → brand)
+    const brandByEmail = new Map();
+    for (const row of brandRows) {
+      if (row.email) brandByEmail.set(row.email.toLowerCase(), row.brand);
+    }
+
+    // --- DEMO MODE: inject dummy Pager & STEM+ customers when no real brand data exists ---
+    // All real customers stay as meow_mobile (default). Dummy customers have synthetic tickets.
+    const demoCustomers = [];
+    if (brandByEmail.size === 0) {
+      const now = new Date();
+      const demoData = [
+        // Meow Pager customers
+        { brand: 'meow_pager', name: 'Sarah Chen', email: 'sarah.chen@demo-pager.com', phone: '+1 (555) 201-4001',
+          stuckAt: 'payment', stuckStage: 'Payment', stuckHours: 96, onboardingStatus: 'PAYING',
+          esimStatus: null, portinStatus: null, orderStatus: 'CREATED', healthScore: 32, healthCategory: 'high',
+          ticket: { id: 'DEMO-P1', subject: 'Unable to complete Meow Pager payment', status: 'open', priority: 'high' } },
+        { brand: 'meow_pager', name: 'Marcus Rivera', email: 'marcus.r@demo-pager.com', phone: '+1 (555) 201-4002',
+          stuckAt: 'esim_activation', stuckStage: 'eSIM Activation', stuckHours: 48, onboardingStatus: 'ACTIVATING',
+          esimStatus: 'ERROR', portinStatus: null, orderStatus: 'PROCESSING', healthScore: 20, healthCategory: 'critical',
+          ticket: { id: 'DEMO-P2', subject: 'Pager eSIM not activating on iPhone 15', status: 'open', priority: 'urgent' } },
+        { brand: 'meow_pager', name: 'Aisha Patel', email: 'aisha.p@demo-pager.com', phone: '+1 (555) 201-4003',
+          stuckAt: 'number_selection', stuckStage: 'Number Selection', stuckHours: 72, onboardingStatus: 'SELECTING_NUMBER',
+          esimStatus: null, portinStatus: 'REVIEWING', orderStatus: 'PROCESSING', healthScore: 45, healthCategory: 'medium',
+          ticket: null },
+        { brand: 'meow_pager', name: 'Jake Morrison', email: 'jake.m@demo-pager.com', phone: '+1 (555) 201-4004',
+          stuckAt: 'order_created', stuckStage: 'Order Created', stuckHours: 168, onboardingStatus: 'ORDERING',
+          esimStatus: null, portinStatus: null, orderStatus: 'CREATED', healthScore: 55, healthCategory: 'medium',
+          ticket: null },
+        // Meow STEM+ customers
+        { brand: 'meow_stem', name: 'Dr. Emily Zhao', email: 'emily.zhao@demo-stem.com', phone: '+1 (555) 301-5001',
+          stuckAt: 'esim_activation', stuckStage: 'eSIM Activation', stuckHours: 24, onboardingStatus: 'ACTIVATING',
+          esimStatus: 'PENDING', portinStatus: null, orderStatus: 'PROCESSING', healthScore: 60, healthCategory: 'medium',
+          ticket: { id: 'DEMO-S1', subject: 'STEM+ eSIM QR code not scanning', status: 'open', priority: 'normal' } },
+        { brand: 'meow_stem', name: 'Prof. Alex Nakamura', email: 'alex.n@demo-stem.com', phone: '+1 (555) 301-5002',
+          stuckAt: 'payment', stuckStage: 'Payment', stuckHours: 120, onboardingStatus: 'PAYING',
+          esimStatus: null, portinStatus: null, orderStatus: 'CREATED', healthScore: 28, healthCategory: 'high',
+          ticket: { id: 'DEMO-S2', subject: 'STEM+ student discount not applying', status: 'pending', priority: 'high' } },
+        { brand: 'meow_stem', name: 'Jordan Lee', email: 'jordan.lee@demo-stem.com', phone: '+1 (555) 301-5003',
+          stuckAt: 'nw_enabled', stuckStage: 'NW Enabled', stuckHours: 36, onboardingStatus: 'ACTIVATING',
+          esimStatus: 'INSTALLED', portinStatus: 'COMPLETED', orderStatus: 'COMPLETED', healthScore: 42, healthCategory: 'high',
+          ticket: { id: 'DEMO-S3', subject: 'No data service after STEM+ eSIM install', status: 'open', priority: 'high' } },
+      ];
+
+      for (const d of demoData) {
+        const brandMeta = BRAND_REGISTRY[d.brand];
+        const slaStatus = d.healthScore <= 25 ? 'breached' : d.healthScore <= 45 ? 'critical' : d.healthScore <= 65 ? 'warning' : 'ok';
+        const issueTags = [];
+        if (d.esimStatus === 'ERROR') issueTags.push('eSIM Failed');
+        if (d.portinStatus === 'REVIEWING') issueTags.push('MNP Stuck');
+        if (d.stuckHours > 168 && !d.ticket) issueTags.push('Silent Stuck');
+        if (d.stuckHours > 168) issueTags.push('Churn Risk');
+
+        const tickets = d.ticket ? [{
+          id: d.ticket.id,
+          subject: d.ticket.subject,
+          status: d.ticket.status,
+          priority: d.ticket.priority,
+          created_at: new Date(now - d.stuckHours * 3600000).toISOString(),
+          updated_at: now.toISOString(),
+          tags: ['proactive_outreach', `lob:${d.brand}`],
+        }] : [];
+
+        demoCustomers.push({
+          id: `demo-${d.email}`,
+          name: d.name,
+          email: d.email,
+          phone: d.phone,
+          userId: null, individualId: null, customerId: null,
+          brandId: d.brand,
+          brandName: brandMeta.displayName,
+          brandColor: brandMeta.color,
+          onboardingStatus: d.onboardingStatus,
+          telcoStatus: null,
+          stuckAt: d.stuckAt,
+          stuckStage: d.stuckStage,
+          stuckOrder: JOURNEY_STAGES.find(s => s.id === d.stuckAt)?.order || 1,
+          stuckHours: d.stuckHours,
+          onboardingTimestamps: {},
+          latestOrderId: null,
+          latestOrderStatus: d.orderStatus,
+          esimStatus: d.esimStatus,
+          portinStatus: d.portinStatus,
+          latestEsimStatus: d.esimStatus,
+          isAirvetActivated: false,
+          msisdn: null, imei: null,
+          city: null, region: null,
+          healthScore: d.healthScore,
+          healthCategory: d.healthCategory,
+          slaStatus,
+          issueTags,
+          recommendedAction: `Review ${brandMeta.displayName} customer stuck at ${d.stuckStage}.`,
+          customerType: d.esimStatus === 'ERROR' ? 'error' : 'stuck',
+          isS100: false, catCount: 0,
+          signedUpAt: new Date(now - d.stuckHours * 3600000).toISOString(),
+          tickets,
+          ticketCount: tickets.length,
+          activeTicketCount: tickets.filter(t => ['new', 'open', 'pending', 'hold'].includes(t.status)).length,
+          latestTicketId: tickets.length > 0 ? tickets[0].id : null,
+          latestTicketSubject: tickets.length > 0 ? tickets[0].subject : null,
+          isSilent: tickets.length === 0,
+          issueSince: new Date(now - d.stuckHours * 3600000).toISOString(),
+          contacts: { agent: 0, mochi: 0 },
+          cisScenario: assignCisScenario({ stuckAt: d.stuckAt, stuckHours: d.stuckHours, esimStatus: d.esimStatus, portinStatus: d.portinStatus, telcoStatus: null, issueTags, isSilent: tickets.length === 0 }),
+          _isDemo: true,
+        });
+      }
+      console.log('DEMO MODE: Injected', demoCustomers.length, 'dummy brand customers (Pager:', demoData.filter(d => d.brand === 'meow_pager').length, '/ STEM+:', demoData.filter(d => d.brand === 'meow_stem').length, ')');
+    }
 
     // Deduplicate tickets (Databricks may have multiple rows per ticket from incremental syncs)
     const ticketMap = new Map();
@@ -1021,6 +1162,10 @@ export async function GET() {
       severityCounts[healthCategory]++;
       slaCounts[slaStatus]++;
 
+      // Brand enrichment
+      const brandId = resolveBrand(brandByEmail.get(customerEmail));
+      const brandMeta = BRAND_REGISTRY[brandId] || BRAND_REGISTRY.meow_mobile;
+
       return {
         id: c.user_id || c.individual_id || c.customer_id,
         name: c.name || 'Unknown',
@@ -1029,6 +1174,10 @@ export async function GET() {
         userId: c.user_id,
         individualId: c.individual_id,
         customerId: c.customer_id,
+        // Brand
+        brandId,
+        brandName: brandMeta.displayName,
+        brandColor: brandMeta.color,
         // Onboarding data
         onboardingStatus: c.onboarding_status,
         telcoStatus: c.telco_customer_status,
@@ -1089,6 +1238,16 @@ export async function GET() {
     // Sort by health score (worst first)
     customers.sort((a, b) => a.healthScore - b.healthScore);
 
+    // Inject demo brand customers (if any) into the main list
+    if (demoCustomers.length > 0) {
+      for (const dc of demoCustomers) {
+        severityCounts[dc.healthCategory] = (severityCounts[dc.healthCategory] || 0) + 1;
+        slaCounts[dc.slaStatus] = (slaCounts[dc.slaStatus] || 0) + 1;
+      }
+      customers.push(...demoCustomers);
+      customers.sort((a, b) => a.healthScore - b.healthScore);
+    }
+
     // Process post-onboarding at-risk customers
     const postOnboarding = postOnboardingCustomers.map(c => {
       const custEmail = (c.email || '').toLowerCase();
@@ -1118,11 +1277,18 @@ export async function GET() {
       else if (!c.telco_customer_status) recommendedAction = 'Investigate why telco account not activated.';
       else if (issueTags.includes('Call Drops')) recommendedAction = 'Customer reporting call drops. Check VoLTE, signal strength, network outages in customer area.';
 
+      // Brand enrichment
+      const postBrandId = resolveBrand(brandByEmail.get(custEmail));
+      const postBrandMeta = BRAND_REGISTRY[postBrandId] || BRAND_REGISTRY.meow_mobile;
+
       return {
         id: c.user_id || c.individual_id || c.customer_id,
         name: c.name || 'Unknown',
         email: c.email,
         phone: c.phone_number,
+        brandId: postBrandId,
+        brandName: postBrandMeta.displayName,
+        brandColor: postBrandMeta.color,
         telcoStatus: c.telco_customer_status,
         stuckAt: 'completed',
         stuckStage: 'Post-Onboarding',
@@ -1153,7 +1319,8 @@ export async function GET() {
     }
 
     // Auto-create proactive tickets for ALL customers (onboarding + post-onboarding) with no active tickets
-    const allForTickets = [...customers, ...postOnboarding];
+    // Exclude demo customers — they have fake emails
+    const allForTickets = [...customers, ...postOnboarding].filter(c => !c._isDemo);
     let proactiveTickets = { created: [], skipped: [], errors: [] };
     if (ZENDESK_SUBDOMAIN) {
       try {
@@ -1192,6 +1359,13 @@ export async function GET() {
     // Ticket Funnel: find unresponded tickets (>24h without agent reply)
     const unrespondedTickets = await findUnrespondedTickets(tickets, emailByRequesterId);
 
+    // Distinct brands found across all customers
+    const allForBrands = [...customers, ...postOnboarding];
+    const availableBrands = [...new Set(allForBrands.map(c => c.brandId))].map(id => ({
+      id,
+      ...(BRAND_REGISTRY[id] || BRAND_REGISTRY.meow_mobile),
+    }));
+
     return NextResponse.json({
       customers,
       total: customers.length,
@@ -1203,6 +1377,7 @@ export async function GET() {
       proactiveTickets,
       postOnboarding: postOnboarding.length > 0 ? postOnboarding : undefined,
       ticketCount: tickets.length,
+      availableBrands,
       fetchedAt: new Date().toISOString(),
       source: 'databricks',
     });

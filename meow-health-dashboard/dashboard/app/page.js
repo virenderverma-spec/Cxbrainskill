@@ -5,6 +5,7 @@ import Header from './components/Header';
 import PriorityQueue from './components/PriorityQueue';
 import JourneyFunnel from './components/JourneyFunnel';
 import TicketFunnel from './components/TicketFunnel';
+import BrandView from './components/BrandView';
 import CustomerDetail from './components/CustomerDetail';
 
 export default function Dashboard() {
@@ -19,11 +20,15 @@ export default function Dashboard() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
 
+  const [brandFilter, setBrandFilter] = useState('all');
+  const [availableBrands, setAvailableBrands] = useState([]);
+
   const [severityCounts, setSeverityCounts] = useState({ critical: 0, high: 0, medium: 0, low: 0, healthy: 0 });
   const [slaCounts, setSlaCounts] = useState({ breached: 0, critical: 0, warning: 0, ok: 0 });
   const [journeyFunnel, setJourneyFunnel] = useState([]);
   const [ticketCount, setTicketCount] = useState(0);
   const [unrespondedTickets, setUnrespondedTickets] = useState([]);
+  const [postOnboarding, setPostOnboarding] = useState([]);
 
   const fetchData = useCallback(async () => {
     try {
@@ -32,11 +37,13 @@ export default function Dashboard() {
       if (!res.ok) throw new Error(`API error: ${res.status}`);
       const data = await res.json();
       setCustomers(data.customers || []);
+      setAvailableBrands(data.availableBrands || []);
       setSeverityCounts(data.severityCounts || {});
       setSlaCounts(data.slaCounts || {});
       setJourneyFunnel(data.journeyFunnel || []);
       setTicketCount(data.ticketCount || 0);
       setUnrespondedTickets(data.unrespondedTickets || []);
+      setPostOnboarding(data.postOnboarding || []);
       setLastUpdated(new Date());
       setError(null);
     } catch (err) {
@@ -67,13 +74,17 @@ export default function Dashboard() {
     if (statusFilter !== 'all') {
       result = result.filter(c => c.healthCategory === statusFilter);
     }
+    if (brandFilter !== 'all') {
+      result = result.filter(c => c.brandId === brandFilter);
+    }
     setFiltered(result);
-  }, [customers, searchTerm, statusFilter]);
+  }, [customers, searchTerm, statusFilter, brandFilter]);
 
   const exportCSV = () => {
-    const headers = ['Name', 'Email', 'Phone', 'Health Score', 'Category', 'SLA', 'Stuck Stage', 'Stuck Hours', 'Onboarding Status', 'eSIM Status', 'Port-in Status', 'Order Status', 'Issue Tags', 'Signed Up'];
+    const headers = ['Name', 'Email', 'Phone', 'Brand', 'Health Score', 'Category', 'SLA', 'Stuck Stage', 'Stuck Hours', 'Onboarding Status', 'eSIM Status', 'Port-in Status', 'Order Status', 'Issue Tags', 'Signed Up'];
     const rows = filtered.map(c => [
-      c.name, c.email || '', c.phone || '', c.healthScore, c.healthCategory, c.slaStatus,
+      c.name, c.email || '', c.phone || '', c.brandName || 'Meow Mobile',
+      c.healthScore, c.healthCategory, c.slaStatus,
       c.stuckStage, Math.round(c.stuckHours || 0), c.onboardingStatus || '',
       c.esimStatus || '', c.portinStatus || '', c.latestOrderStatus || '',
       (c.issueTags || []).join('; '), c.signedUpAt || '',
@@ -122,6 +133,9 @@ export default function Dashboard() {
         statusFilter={statusFilter}
         onStatusChange={setStatusFilter}
         ticketCount={ticketCount}
+        brandFilter={brandFilter}
+        onBrandChange={setBrandFilter}
+        availableBrands={availableBrands}
       />
 
       {/* Tabs */}
@@ -161,6 +175,21 @@ export default function Dashboard() {
             </span>
           )}
         </button>
+        <button
+          onClick={() => setTab('brand')}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-2 ${
+            tab === 'brand'
+              ? 'bg-[#6C5CE7]/20 text-[#6C5CE7] border border-[#6C5CE7]/30'
+              : 'bg-dark-card text-gray-500 border border-dark-border hover:text-gray-300'
+          }`}
+        >
+          Brand
+          {availableBrands.length > 0 && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[#6C5CE7]/20 text-[#6C5CE7] border border-[#6C5CE7]/30 font-mono">
+              {availableBrands.length}
+            </span>
+          )}
+        </button>
       </div>
 
       {error && (
@@ -184,7 +213,13 @@ export default function Dashboard() {
       ) : tab === 'funnel' ? (
         <JourneyFunnel
           customers={filtered}
+          postOnboarding={postOnboarding}
           journeyFunnel={journeyFunnel}
+          onSelect={setSelectedCustomer}
+        />
+      ) : tab === 'brand' ? (
+        <BrandView
+          customers={filtered}
           onSelect={setSelectedCustomer}
         />
       ) : (

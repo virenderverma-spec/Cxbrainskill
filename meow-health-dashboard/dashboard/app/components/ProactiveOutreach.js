@@ -4,21 +4,23 @@ import { useState } from 'react';
 import { ZENDESK_BASE } from './shared';
 
 // Client-side message preview (mirrors the API route templates)
-function buildPreviewSubject(stuckAt, name) {
+function buildPreviewSubject(stuckAt, name, brandName) {
   const firstName = (name || 'there').split(' ')[0];
+  const brand = brandName || 'Meow Mobile';
   const subjects = {
-    order_created: `${firstName}, we noticed your Meow Mobile order needs attention`,
-    payment: `${firstName}, let's get your Meow Mobile payment sorted`,
+    order_created: `${firstName}, we noticed your ${brand} order needs attention`,
+    payment: `${firstName}, let's get your ${brand} payment sorted`,
     number_selection: `${firstName}, your number transfer is in progress`,
     esim_activation: `${firstName}, we're working on your eSIM activation`,
     nw_enabled: `${firstName}, let's get your network up and running`,
     airvet_account: `${firstName}, one last step — setting up your Airvet account`,
   };
-  return subjects[stuckAt] || `${firstName}, an update on your Meow Mobile setup`;
+  return subjects[stuckAt] || `${firstName}, an update on your ${brand} setup`;
 }
 
 function buildPreviewMessage(customer) {
   const firstName = (customer.name || 'there').split(' ')[0];
+  const brand = customer.brandName || 'Meow Mobile';
   const stuckHours = Math.round(customer.stuckHours || 0);
   const stuckDays = Math.floor(stuckHours / 24);
   const durationText = stuckDays > 0 ? `${stuckDays} day${stuckDays > 1 ? 's' : ''}` : `${stuckHours} hours`;
@@ -27,17 +29,17 @@ function buildPreviewMessage(customer) {
     order_created: {
       issue: `We noticed your order was created ${durationText} ago but hasn't moved to the next step yet.`,
       doing: `Our team is reviewing your order to make sure everything is in order. We want to ensure there are no blockers preventing your setup from moving forward.`,
-      action: `You don't need to do anything right now. If you'd like to continue your setup, you can open the Meow Mobile app and pick up where you left off. If you're having trouble, just reply to this email and we'll help you out.`,
+      action: `You don't need to do anything right now. If you'd like to continue your setup, you can open the ${brand} app and pick up where you left off. If you're having trouble, just reply to this email and we'll help you out.`,
     },
     payment: {
       issue: `We see that your payment step hasn't completed yet — it's been about ${durationText} since you started your setup.`,
       doing: `We're checking to make sure there are no issues on our end with the payment process. Sometimes a card update or a simple retry is all that's needed.`,
-      action: `If your payment didn't go through, you can try again in the Meow Mobile app. Make sure your card details are up to date. If you're seeing any errors, reply to this email and we'll sort it out for you.`,
+      action: `If your payment didn't go through, you can try again in the ${brand} app. Make sure your card details are up to date. If you're seeing any errors, reply to this email and we'll sort it out for you.`,
     },
     number_selection: {
       issue: `Your number selection or port-in request has been pending for about ${durationText}.`,
       doing: `Number transfers can sometimes take a bit of time depending on your previous carrier. We're monitoring the status and will let you know as soon as it's complete.`,
-      action: `If you haven't started a number transfer and just need a new number, you can select one in the Meow Mobile app. Otherwise, sit tight — we're on it.`,
+      action: `If you haven't started a number transfer and just need a new number, you can select one in the ${brand} app. Otherwise, sit tight — we're on it.`,
     },
     esim_activation: {
       issue: customer.esimStatus === 'ERROR'
@@ -53,22 +55,22 @@ function buildPreviewMessage(customer) {
     nw_enabled: {
       issue: `It looks like your eSIM is installed but your network connection isn't fully active yet.`,
       doing: `We're investigating why the network hasn't come online. This could be a provisioning delay or a settings issue that we can fix quickly.`,
-      action: `Try restarting your phone and make sure your Meow Mobile eSIM is set as the primary line. If calls and data still aren't working, reply here and we'll troubleshoot with you.`,
+      action: `Try restarting your phone and make sure your ${brand} eSIM is set as the primary line. If calls and data still aren't working, reply here and we'll troubleshoot with you.`,
     },
     airvet_account: {
-      issue: `You're almost there! Your Meow Mobile service is active, but your Airvet pet care account hasn't been set up yet.`,
+      issue: `You're almost there! Your ${brand} service is active, but your Airvet pet care account hasn't been set up yet.`,
       doing: `We're checking the Airvet integration to make sure your account can be created. This is the final step to unlock your free vet care benefit.`,
-      action: `Open the Meow Mobile app and follow the prompts to register your pet with Airvet. If you're having trouble or the option isn't showing up, reply to this email and we'll get it sorted.`,
+      action: `Open the ${brand} app and follow the prompts to register your pet with Airvet. If you're having trouble or the option isn't showing up, reply to this email and we'll get it sorted.`,
     },
   };
 
   const t = templates[customer.stuckAt] || {
-    issue: `We noticed your Meow Mobile setup hasn't completed yet — it's been about ${durationText}.`,
+    issue: `We noticed your ${brand} setup hasn't completed yet — it's been about ${durationText}.`,
     doing: `Our team is reviewing your account to identify any blockers and get things moving.`,
-    action: `Open the Meow Mobile app to continue your setup, or reply to this email if you need any help.`,
+    action: `Open the ${brand} app to continue your setup, or reply to this email if you need any help.`,
   };
 
-  return `Hi ${firstName},\n\n${t.issue}\n\nWhat we're doing:\n${t.doing}\n\nWhat you can do:\n${t.action}\n\nWe're committed to making your Meow Mobile experience great. If you have any questions at all, just reply to this email and a member of our team will be happy to help.\n\nWarm regards,\nMeow Mobile Support Team`;
+  return `Hi ${firstName},\n\n${t.issue}\n\nWhat we're doing:\n${t.doing}\n\nWhat you can do:\n${t.action}\n\nWe're committed to making your ${brand} experience great. If you have any questions at all, just reply to this email and a member of our team will be happy to help.\n\nWarm regards,\n${brand} Support Team`;
 }
 
 export default function ProactiveOutreach({ customer, onClose, onTicketCreated }) {
@@ -76,7 +78,7 @@ export default function ProactiveOutreach({ customer, onClose, onTicketCreated }
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
-  const [subject, setSubject] = useState(() => buildPreviewSubject(customer.stuckAt, customer.name));
+  const [subject, setSubject] = useState(() => buildPreviewSubject(customer.stuckAt, customer.name, customer.brandName));
   const [message, setMessage] = useState(() => buildPreviewMessage(customer));
   const [editing, setEditing] = useState(false);
 
@@ -111,7 +113,7 @@ export default function ProactiveOutreach({ customer, onClose, onTicketCreated }
   };
 
   const handleReset = () => {
-    setSubject(buildPreviewSubject(customer.stuckAt, customer.name));
+    setSubject(buildPreviewSubject(customer.stuckAt, customer.name, customer.brandName));
     setMessage(buildPreviewMessage(customer));
   };
 
@@ -239,9 +241,12 @@ export default function ProactiveOutreach({ customer, onClose, onTicketCreated }
               </div>
 
               {/* Tags */}
-              <div className="flex items-center gap-2 text-xs text-gray-500">
+              <div className="flex items-center gap-2 text-xs text-gray-500 flex-wrap">
                 <span>Tags:</span>
                 <span className="px-2 py-0.5 rounded bg-dark-surface text-gray-400 font-mono text-[10px]">proactive_outreach</span>
+                {customer.brandId && (
+                  <span className="px-2 py-0.5 rounded bg-dark-surface text-gray-400 font-mono text-[10px]">lob:{customer.brandId}</span>
+                )}
                 <span className="px-2 py-0.5 rounded bg-dark-surface text-gray-400 font-mono text-[10px]">stuck_{customer.stuckAt || 'unknown'}</span>
               </div>
 
